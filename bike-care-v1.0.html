@@ -1,0 +1,2933 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+<title>Bike Care V1.0 — Sales · Inventory · Books</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Inter+Tight:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<script src="https://cdn.tailwindcss.com"></script>
+<script crossorigin src="https://unpkg.com/react@18.3.1/umd/react.production.min.js"></script>
+<script crossorigin src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js"></script>
+<script crossorigin src="https://unpkg.com/prop-types@15.8.1/prop-types.min.js"></script>
+<script crossorigin src="https://unpkg.com/recharts@2.12.7/umd/Recharts.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore-compat.js"></script>
+<script>
+  // ── FIREBASE CONFIG — Bike Care V1.0 ───────────────────────────────
+  // Public Web API keys — security comes from Firestore Rules + Auth.
+  const firebaseConfig = {
+    apiKey: "AIzaSyBqvOLt3V15IM4YRoQxqpAFfa3E5ppTId4",
+    authDomain: "bikecareerp.firebaseapp.com",
+    projectId: "bikecareerp",
+    storageBucket: "bikecareerp.firebasestorage.app",
+    messagingSenderId: "447873429981",
+    appId: "1:447873429981:web:9c1e832136c6122fadc634",
+    measurementId: "G-P6V5SFPBLF"
+  };
+  try {
+    if (typeof firebase !== 'undefined') {
+      firebase.initializeApp(firebaseConfig);
+      // Auth session survives browser close (default LOCAL persistence is fine).
+      firebase.auth().setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(() => {});
+      window.__BC_AUTH = firebase.auth();
+      window.__BC_DB   = firebase.firestore();
+      window.__BC_FS   = firebase;
+      // Offline persistence — Firestore caches everything locally; works offline.
+      window.__BC_DB.enablePersistence({ synchronizeTabs: true }).catch(err => {
+        console.warn('Firestore offline persistence:', err && err.code);
+      });
+    } else {
+      console.error('Firebase SDK failed to load — app will run in local-only fallback.');
+    }
+  } catch (e) {
+    console.error('Firebase init failed:', e);
+  }
+</script>
+<script src="https://unpkg.com/@babel/standalone@7.24.7/babel.min.js"></script>
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        colors: {
+          paper:  '#f5efe1',
+          paper2: '#ede5d2',
+          rule:   '#d9cfb6',
+          rule2:  '#c2b791',
+          ink:    '#1b1c22',
+          ink2:   '#3d3a36',
+          mute:   '#7a7464',
+          wax:    '#7a1f2b',
+          wax2:   '#9a2735',
+          gold:   '#a07a2a',
+          ok:     '#3a6a3e',
+        },
+        fontFamily: {
+          serif: ['Fraunces', 'ui-serif', 'Georgia', 'serif'],
+          sans:  ['Inter Tight', 'ui-sans-serif', 'system-ui'],
+          mono:  ['JetBrains Mono', 'ui-monospace', 'Menlo', 'monospace'],
+        },
+      },
+    },
+  };
+</script>
+<style>
+  html, body { background: #f5efe1; color: #1b1c22; font-family: 'Inter Tight', system-ui, sans-serif; }
+  body { background-image:
+      repeating-linear-gradient(0deg, transparent 0 26px, rgba(192,179,140,0.18) 26px 27px),
+      radial-gradient(ellipse at top left, rgba(122,31,43,0.04), transparent 60%);
+    background-attachment: fixed;
+  }
+  .num { font-variant-numeric: tabular-nums; font-family: 'JetBrains Mono', monospace; }
+  .display { font-family: 'Fraunces', serif; font-optical-sizing: auto; letter-spacing: -0.01em; }
+  .smcap { font-family: 'Inter Tight', sans-serif; text-transform: uppercase; letter-spacing: 0.14em; font-size: 11px; font-weight: 600; }
+  .rule { background-image: linear-gradient(to right, transparent, #c2b791 20%, #c2b791 80%, transparent); height: 1px; }
+  /* Visible focus for keyboard users */
+  input:focus, select:focus, textarea:focus, button:focus { outline: 2px solid #7a1f2b; outline-offset: 1px; }
+  input, select, textarea {
+    background: rgba(255,253,247,0.6);
+    border: 1px solid #c2b791;
+    border-radius: 2px;
+    padding: 6px 8px;
+    color: #1b1c22;
+    font-family: inherit;
+  }
+  input.num, .num input { font-family: 'JetBrains Mono', monospace; text-align: right; }
+  input[type=date] { font-family: 'JetBrains Mono', monospace; }
+  table.ledger { border-collapse: collapse; width: 100%; }
+  table.ledger th, table.ledger td { border-bottom: 1px solid #d9cfb6; padding: 8px 10px; text-align: left; }
+  table.ledger th { background: rgba(217,207,182,0.45); font-weight: 600; font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: #3d3a36; }
+  table.ledger tr:hover td { background: rgba(255,253,247,0.5); }
+  .key { font-family: 'JetBrains Mono', monospace; font-size: 10px; padding: 2px 5px; background: #1b1c22; color: #f5efe1; border-radius: 2px; letter-spacing: 0.06em; }
+  .keypaper { font-family: 'JetBrains Mono', monospace; font-size: 10px; padding: 2px 5px; background: #f5efe1; color: #1b1c22; border: 1px solid #1b1c22; border-radius: 2px; letter-spacing: 0.06em; }
+  .btn { padding: 6px 14px; font-size: 12px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; border-radius: 2px; border: 1px solid transparent; cursor: pointer; transition: all 0.15s ease; }
+  .btn-primary { background: #7a1f2b; color: #f5efe1; border-color: #7a1f2b; }
+  .btn-primary:hover { background: #9a2735; }
+  .btn-ghost { background: transparent; color: #1b1c22; border-color: #c2b791; }
+  .btn-ghost:hover { background: rgba(217,207,182,0.5); }
+  .btn-danger { background: transparent; color: #7a1f2b; border-color: #7a1f2b; }
+  .btn-danger:hover { background: #7a1f2b; color: #f5efe1; }
+  .chip { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; background: rgba(217,207,182,0.6); border-radius: 999px; font-size: 11px; }
+  /* Wax seal effect */
+  .seal {
+    width: 56px; height: 56px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #b03142, #7a1f2b 60%, #5a131c);
+    display: flex; align-items: center; justify-content: center;
+    color: #f5efe1; font-family: 'Fraunces', serif; font-weight: 600; font-style: italic;
+    box-shadow: 0 4px 8px rgba(90,19,28,0.3), inset 0 -2px 4px rgba(0,0,0,0.3);
+    transform: rotate(-7deg);
+  }
+  /* Suggestions dropdown */
+  .suggest { position: absolute; z-index: 50; background: #fffdf7; border: 1px solid #c2b791; border-radius: 2px; box-shadow: 0 8px 24px rgba(0,0,0,0.08); max-height: 280px; overflow-y: auto; min-width: 100%; }
+  .suggest-item { padding: 6px 10px; font-size: 13px; cursor: pointer; border-bottom: 1px solid #ede5d2; }
+  .suggest-item:hover, .suggest-item.active { background: #f5efe1; }
+  .suggest-item .meta { color: #7a7464; font-size: 11px; }
+  /* Modal */
+  .modal-bg { position: fixed; inset: 0; background: rgba(27,28,34,0.4); z-index: 100; display: flex; align-items: center; justify-content: center; padding: 24px; }
+  .modal-card { background: #f5efe1; border: 1px solid #c2b791; border-radius: 4px; max-width: 700px; width: 100%; max-height: 90vh; overflow-y: auto; box-shadow: 0 24px 48px rgba(0,0,0,0.2); }
+  /* Print */
+  @media print {
+    body { background: white; }
+    .no-print { display: none !important; }
+  }
+  /* Subtle scrollbar */
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #c2b791; border-radius: 4px; }
+  ::-webkit-scrollbar-thumb:hover { background: #a89c75; }
+</style>
+</head>
+<body>
+<div id="root">
+  <div style="padding:48px 24px;font-family:'Inter Tight',system-ui,sans-serif;color:#7a7464;text-align:center">
+    <div style="font-family:'Fraunces',serif;font-size:28px;color:#7a1f2b;font-style:italic;margin-bottom:8px">Bike Care <span style="font-size:14px;font-style:normal;letter-spacing:0.06em">V1.0</span></div>
+    <div style="font-size:13px;letter-spacing:0.14em;text-transform:uppercase">Loading the books…</div>
+  </div>
+</div>
+<script type="text/babel">
+'use strict';
+
+const { useState, useEffect, useMemo, useRef, useCallback } = React;
+const _R = (typeof Recharts !== 'undefined' && Recharts) ? Recharts : {};
+const { LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } = _R;
+const ChartsAvailable = !!_R.LineChart;
+
+// ──────────────────────────────────────────────────────────────────────────
+// CONSTANTS
+// ──────────────────────────────────────────────────────────────────────────
+
+const STORAGE_KEY = 'bikecare_erp_v1';
+
+// 19 predefined ledger groups, each tagged with its accounting nature
+// nature: 'asset' | 'liability' | 'income' | 'expense'
+const DEFAULT_GROUPS = [
+  { id: 'g_bank',          name: 'Bank Accounts',       nature: 'asset',     order: 1  },
+  { id: 'g_bank_od',       name: 'Bank O/D Accounts',   nature: 'liability', order: 2  },
+  { id: 'g_capital',       name: 'Capital A/c',         nature: 'liability', order: 3  },
+  { id: 'g_cash',          name: 'Cash in Hand',        nature: 'asset',     order: 4  },
+  { id: 'g_curr_assets',   name: 'Current Assets',      nature: 'asset',     order: 5  },
+  { id: 'g_curr_liab',     name: 'Current Liabilities', nature: 'liability', order: 6  },
+  { id: 'g_direct_exp',    name: 'Direct Expenses',     nature: 'expense',   order: 7  },
+  { id: 'g_direct_inc',    name: 'Direct Incomes',      nature: 'income',    order: 8  },
+  { id: 'g_duties',        name: 'Duties & Taxes',      nature: 'liability', order: 9  },
+  { id: 'g_fixed_assets',  name: 'Fixed Assets',        nature: 'asset',     order: 10 },
+  { id: 'g_indirect_exp',  name: 'Indirect Expenses',   nature: 'expense',   order: 11 },
+  { id: 'g_indirect_inc',  name: 'Indirect Income',     nature: 'income',    order: 12 },
+  { id: 'g_provisions',    name: 'Provisions',          nature: 'liability', order: 13 },
+  { id: 'g_reserves',      name: 'Reserve & Surplus',   nature: 'liability', order: 14 },
+  { id: 'g_purchase',      name: 'Purchase Accounts',   nature: 'expense',   order: 15 },
+  { id: 'g_sales',         name: 'Sales Accounts',      nature: 'income',    order: 16 },
+  { id: 'g_sundry_cr',     name: 'Sundry Creditors',    nature: 'liability', order: 17 },
+  { id: 'g_sundry_dr',     name: 'Sundry Debtors',      nature: 'asset',     order: 18 },
+  { id: 'g_suspense',      name: 'Suspense Account',    nature: 'liability', order: 19 },
+];
+
+const DEFAULT_LEDGERS = [
+  { id: 'l_cash',     name: 'Cash',             groupId: 'g_cash',    openingBalance: 0, locked: true },
+  { id: 'l_sales',    name: 'Sales',            groupId: 'g_sales',   openingBalance: 0, locked: true },
+  { id: 'l_purchase', name: 'Purchase',         groupId: 'g_purchase', openingBalance: 0, locked: true },
+  { id: 'l_pl',       name: 'Profit & Loss A/c', groupId: 'g_capital', openingBalance: 0, locked: true },
+];
+
+const DEFAULT_UNITS = [
+  { id: 'u_pcs', name: 'Pcs' },
+  { id: 'u_kg',  name: 'Kg'  },
+  { id: 'u_g',   name: 'Gram' },
+  { id: 'u_box', name: 'Box' },
+  { id: 'u_pkt', name: 'Packet' },
+];
+
+const SCREENS = {
+  PURCHASES: { key: 'PURCHASES', label: 'Purchases', hot: 'F1' },
+  SALES:     { key: 'SALES',     label: 'Sales',     hot: 'F2' },
+  PAYMENT:   { key: 'PAYMENT',   label: 'Payment',   hot: 'F3' },
+  RECEIPT:   { key: 'RECEIPT',   label: 'Receipt',   hot: 'F4' },
+  JOURNAL:   { key: 'JOURNAL',   label: 'Journal',   hot: 'F5' },
+  REPORTS:   { key: 'REPORTS',   label: 'Reports',   hot: 'F6' },
+  MASTERS:   { key: 'MASTERS',   label: 'Masters',   hot: 'F7' },
+};
+const SCREEN_LIST = ['PURCHASES','SALES','PAYMENT','RECEIPT','JOURNAL','REPORTS','MASTERS'];
+
+const todayISO = () => new Date().toISOString().slice(0, 10);
+const fmtDate = (iso) => {
+  if (!iso) return '';
+  const [y,m,d] = iso.split('-');
+  return `${d}/${m}/${y}`;
+};
+const inr = (n) => {
+  const num = Number(n) || 0;
+  const sign = num < 0 ? '-' : '';
+  const abs = Math.abs(num);
+  // Indian numbering with 2dp
+  const s = abs.toFixed(2);
+  const [intP, decP] = s.split('.');
+  const last3 = intP.slice(-3);
+  const rest = intP.slice(0, -3);
+  const restF = rest.replace(/\B(?=(\d{2})+(?!\d))/g, ',');
+  return sign + (rest ? restF + ',' + last3 : last3) + '.' + decP;
+};
+const uid = (prefix) => `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2,8)}`;
+
+// ──────────────────────────────────────────────────────────────────────────
+// STORAGE — Layered: Firestore (primary, cross-device)
+//                  ↔ localStorage (instant cache + offline)
+//                  + daily snapshots (history viewer)
+//                  + optional auto-download (filesystem failsafe)
+// ──────────────────────────────────────────────────────────────────────────
+
+const SNAPSHOT_KEY      = 'bikecare_erp_v1_snaps';
+const LAST_DOWNLOAD_KEY = 'bikecare_erp_v1_lastDl';
+const AUTO_DL_PREF_KEY  = 'bikecare_erp_v1_autoDl';
+const SNAPSHOT_LIMIT    = 30; // keep 30 most recent days, plus pinned
+
+const initialState = () => ({
+  meta: {
+    businessName: 'Bike Care',
+    since: '1877',
+    fyStart: `${new Date().getFullYear()}-04-01`,
+  },
+  groups: DEFAULT_GROUPS,
+  ledgers: DEFAULT_LEDGERS,
+  units: DEFAULT_UNITS,
+  superCategories: [],
+  subCategories: [],
+  items: [],
+  vouchers: [],
+  ledgerEntries: [],
+  stockEntries: [],
+  counters: { sales: 1, purchase: 1, payment: 1, receipt: 1, journal: 1 },
+});
+
+const normalizeState = (parsed) => ({
+  ...initialState(),
+  ...(parsed || {}),
+  groups: parsed && parsed.groups && parsed.groups.length === 19 ? parsed.groups : DEFAULT_GROUPS,
+});
+
+// — localStorage mirror (Tier 2: instant first paint + offline) —
+const loadStateLocal = () => {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return initialState();
+    return normalizeState(JSON.parse(raw));
+  } catch (e) {
+    console.error('Local load failed', e);
+    return initialState();
+  }
+};
+const saveStateLocal = (s) => {
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(s)); } catch (e) { console.error(e); }
+};
+
+// — daily snapshots ring buffer (Tier 3: in-app history) —
+const loadSnapshots = () => {
+  try {
+    const raw = localStorage.getItem(SNAPSHOT_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch (e) { return []; }
+};
+const saveSnapshots = (arr) => {
+  try { localStorage.setItem(SNAPSHOT_KEY, JSON.stringify(arr)); } catch (e) { console.error(e); }
+};
+const captureSnapshotIfNeeded = (s) => {
+  try {
+    const today = todayISO();
+    const snaps = loadSnapshots();
+    const idx = snaps.findIndex(x => x.date === today);
+    const sales = (s.vouchers || []).filter(v => v.type === 'sales');
+    const meta = {
+      date: today,
+      voucherCount: (s.vouchers || []).length,
+      salesCount: sales.length,
+      totalSales: sales.reduce((sum, v) => sum + (Number(v.grand) || 0), 0),
+      capturedAt: Date.now(),
+      pinned: idx >= 0 ? !!snaps[idx].pinned : false,
+      payload: JSON.stringify(s),
+    };
+    if (idx >= 0) snaps[idx] = meta; else snaps.push(meta);
+    // Keep most recent SNAPSHOT_LIMIT, plus any pinned, plus today's
+    const sorted = snaps.sort((a, b) => b.date.localeCompare(a.date));
+    const trimmed = sorted.filter((x, i) => x.pinned || x.date === today || i < SNAPSHOT_LIMIT);
+    saveSnapshots(trimmed);
+  } catch (e) { console.error('Snapshot capture failed', e); }
+};
+const pinSnapshot = (date, pin) => {
+  const snaps = loadSnapshots();
+  const idx = snaps.findIndex(x => x.date === date);
+  if (idx >= 0) { snaps[idx].pinned = !!pin; saveSnapshots(snaps); }
+};
+const deleteSnapshot = (date) => {
+  saveSnapshots(loadSnapshots().filter(x => x.date !== date));
+};
+
+// — daily auto-download (Tier 4: optional filesystem failsafe) —
+const triggerDailyAutoDownload = (s) => {
+  try {
+    if (localStorage.getItem(AUTO_DL_PREF_KEY) !== '1') return;
+    const today = todayISO();
+    if (localStorage.getItem(LAST_DOWNLOAD_KEY) === today) return;
+    const blob = new Blob([JSON.stringify(s, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `bikecare-erp-${today}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    localStorage.setItem(LAST_DOWNLOAD_KEY, today);
+  } catch (e) { console.error('Auto-download failed', e); }
+};
+
+// — Firestore (Tier 1: primary, cross-device, real-time) —
+const FIRESTORE_DOC_PATH = 'app/state'; // single doc; easy to migrate to per-collection later
+
+const fbAuth = () => (typeof window !== 'undefined' ? window.__BC_AUTH : null);
+const fbDB   = () => (typeof window !== 'undefined' ? window.__BC_DB   : null);
+const fbNS   = () => (typeof window !== 'undefined' ? window.__BC_FS   : null);
+const cloudReady = () => !!(fbAuth() && fbDB() && fbNS());
+
+// ──────────────────────────────────────────────────────────────────────────
+// ACCOUNTING HELPERS
+// ──────────────────────────────────────────────────────────────────────────
+
+// Compute balance for a single ledger as of optional date (inclusive)
+// Returns positive number with separate 'side' indicating Dr or Cr balance
+function ledgerBalance(state, ledgerId, asOfDate) {
+  const ledger = state.ledgers.find(l => l.id === ledgerId);
+  if (!ledger) return { amount: 0, side: 'dr' };
+  const group = state.groups.find(g => g.id === ledger.groupId);
+  const naturalDr = group && (group.nature === 'asset' || group.nature === 'expense');
+  let dr = 0, cr = 0;
+  // Opening balance: assets/expenses are normally debit; liabilities/income normally credit
+  if (ledger.openingBalance) {
+    if (naturalDr) dr += Number(ledger.openingBalance) || 0;
+    else cr += Number(ledger.openingBalance) || 0;
+  }
+  state.ledgerEntries.forEach(e => {
+    if (e.ledgerId !== ledgerId) return;
+    if (asOfDate && e.date > asOfDate) return;
+    dr += Number(e.dr) || 0;
+    cr += Number(e.cr) || 0;
+  });
+  const net = dr - cr;
+  return { amount: Math.abs(net), side: net >= 0 ? 'dr' : 'cr', dr, cr };
+}
+
+// Stock balance for an item
+function stockBalance(state, itemId, asOfDate) {
+  const item = state.items.find(i => i.id === itemId);
+  if (!item) return 0;
+  let bal = Number(item.openingBalance) || 0;
+  state.stockEntries.forEach(e => {
+    if (e.itemId !== itemId) return;
+    if (asOfDate && e.date > asOfDate) return;
+    bal += (Number(e.in) || 0) - (Number(e.out) || 0);
+  });
+  return bal;
+}
+
+// Find or create a customer/vendor ledger by name
+function findOrCreateParty(state, name, groupId) {
+  const trimmed = (name || '').trim();
+  if (!trimmed) return null;
+  const existing = state.ledgers.find(l => l.name.toLowerCase() === trimmed.toLowerCase());
+  if (existing) return existing;
+  const newL = { id: uid('l'), name: trimmed, groupId, openingBalance: 0, contact: '', address: '', vehicle: '' };
+  state.ledgers.push(newL);
+  return newL;
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// COMMON COMPONENTS
+// ──────────────────────────────────────────────────────────────────────────
+
+function PaperCard({ children, className = '' }) {
+  return (
+    <div className={`bg-paper rounded-sm border border-rule shadow-sm ${className}`}
+         style={{ boxShadow: '0 1px 0 rgba(255,253,247,0.6) inset, 0 2px 8px rgba(60,40,20,0.06)' }}>
+      {children}
+    </div>
+  );
+}
+
+function ScreenHeader({ title, voucherNo, voucherDate, onDateChange, right }) {
+  return (
+    <div className="border-b border-rule2 pb-3 mb-4 flex items-end justify-between gap-4">
+      <div>
+        <div className="smcap text-mute">{voucherNo ? 'Voucher' : ''}</div>
+        <h2 className="display text-3xl font-medium text-ink leading-none">{title}</h2>
+      </div>
+      <div className="flex items-center gap-4">
+        {voucherDate !== undefined && (
+          <label className="text-sm flex items-center gap-2">
+            <span className="smcap text-mute">Date</span>
+            <input type="date" value={voucherDate} onChange={(e) => onDateChange(e.target.value)} className="text-sm" />
+          </label>
+        )}
+        {voucherNo !== undefined && (
+          <div className="text-right">
+            <div className="smcap text-mute">No.</div>
+            <div className="num text-lg font-semibold">{voucherNo}</div>
+          </div>
+        )}
+        {right}
+      </div>
+    </div>
+  );
+}
+
+// Autocomplete picker — supports keyboard nav, fast filter, "create new" inline
+function Picker({ value, onChange, options, placeholder = '', getLabel = (o) => o.name, getMeta, allowCreate = false, onCreate, autoFocus, className = '' }) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState(value ? getLabel(options.find(o => o.id === value) || { name: '' }) : '');
+  const [active, setActive] = useState(0);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    const o = options.find(o => o.id === value);
+    setQuery(o ? getLabel(o) : (value ? value : ''));
+  }, [value, options.length]);
+
+  const filtered = useMemo(() => {
+    const q = query.toLowerCase().trim();
+    if (!q) return options.slice(0, 50);
+    return options.filter(o => getLabel(o).toLowerCase().includes(q)).slice(0, 50);
+  }, [query, options]);
+
+  const pick = (opt) => {
+    onChange(opt.id, opt);
+    setQuery(getLabel(opt));
+    setOpen(false);
+  };
+  const createNew = () => {
+    if (!query.trim() || !onCreate) return;
+    const created = onCreate(query.trim());
+    if (created) {
+      onChange(created.id, created);
+      setQuery(getLabel(created));
+    }
+    setOpen(false);
+  };
+  const onKey = (e) => {
+    if (e.key === 'ArrowDown') { e.preventDefault(); setActive(a => Math.min(a + 1, filtered.length - (allowCreate ? 0 : 1))); setOpen(true); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); setActive(a => Math.max(a - 1, 0)); }
+    else if (e.key === 'Enter') {
+      e.preventDefault();
+      if (active < filtered.length) pick(filtered[active]);
+      else if (allowCreate && query.trim()) createNew();
+    } else if (e.key === 'Escape') {
+      setOpen(false);
+    }
+  };
+
+  return (
+    <div className={`relative ${className}`} ref={ref}>
+      <input
+        value={query}
+        autoFocus={autoFocus}
+        onChange={(e) => { setQuery(e.target.value); setOpen(true); setActive(0); }}
+        onFocus={() => setOpen(true)}
+        onBlur={() => setTimeout(() => setOpen(false), 150)}
+        onKeyDown={onKey}
+        placeholder={placeholder}
+        className="w-full"
+      />
+      {open && (
+        <div className="suggest">
+          {filtered.length === 0 && !allowCreate && (
+            <div className="suggest-item text-mute italic">No matches</div>
+          )}
+          {filtered.map((o, i) => (
+            <div key={o.id} className={`suggest-item ${i === active ? 'active' : ''}`}
+                 onMouseDown={() => pick(o)} onMouseEnter={() => setActive(i)}>
+              <div className="font-medium">{getLabel(o)}</div>
+              {getMeta && <div className="meta">{getMeta(o)}</div>}
+            </div>
+          ))}
+          {allowCreate && query.trim() && !filtered.find(o => getLabel(o).toLowerCase() === query.toLowerCase().trim()) && (
+            <div className={`suggest-item ${active === filtered.length ? 'active' : ''}`}
+                 onMouseDown={createNew}
+                 onMouseEnter={() => setActive(filtered.length)}>
+              <span className="text-wax font-medium">+ Create</span> "{query.trim()}"
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Modal({ open, onClose, title, children, footer }) {
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [open, onClose]);
+  if (!open) return null;
+  return (
+    <div className="modal-bg" onClick={onClose}>
+      <div className="modal-card" onClick={(e) => e.stopPropagation()}>
+        <div className="px-6 pt-5 pb-3 border-b border-rule flex items-start justify-between">
+          <h3 className="display text-2xl">{title}</h3>
+          <button onClick={onClose} className="text-mute hover:text-ink text-xl leading-none">×</button>
+        </div>
+        <div className="px-6 py-4">{children}</div>
+        {footer && <div className="px-6 py-4 border-t border-rule flex justify-end gap-2 bg-paper2/40">{footer}</div>}
+      </div>
+    </div>
+  );
+}
+
+function Toast({ msg, onDone }) {
+  useEffect(() => {
+    if (!msg) return;
+    const t = setTimeout(onDone, 2400);
+    return () => clearTimeout(t);
+  }, [msg]);
+  if (!msg) return null;
+  return (
+    <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[200] bg-ink text-paper px-5 py-3 rounded-sm shadow-lg text-sm font-medium animate-fadein">
+      {msg}
+    </div>
+  );
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// SALES SCREEN
+// ──────────────────────────────────────────────────────────────────────────
+
+function SalesScreen({ state, setState, toast, gotoReceipt }) {
+  const next = state.counters.sales;
+  const [date, setDate] = useState(todayISO());
+  const [customerId, setCustomerId] = useState('');
+  const [customerName, setCustomerName] = useState('');
+  const [address, setAddress] = useState('');
+  const [contact, setContact] = useState('');
+  const [vehicle, setVehicle] = useState('');
+  const [lines, setLines] = useState([{ id: uid('ln'), itemId: '', qty: '', rate: '' }]);
+  const [otherCharges, setOtherCharges] = useState([]); // [{ledgerId, amount}]
+  const [narration, setNarration] = useState('');
+  const [savedVoucher, setSavedVoucher] = useState(null);
+
+  const customers = useMemo(() => state.ledgers.filter(l => l.groupId === 'g_sundry_dr' || (l.contact || l.address || l.vehicle)), [state.ledgers]);
+  const otherChargeLedgers = useMemo(() => state.ledgers.filter(l => {
+    const g = state.groups.find(x => x.id === l.groupId);
+    return g && (g.nature === 'income' || g.id === 'g_duties' || g.id === 'g_curr_liab');
+  }), [state.ledgers, state.groups]);
+
+  const total = useMemo(() => lines.reduce((s, l) => s + (Number(l.qty) || 0) * (Number(l.rate) || 0), 0), [lines]);
+  const charges = useMemo(() => otherCharges.reduce((s, c) => s + (Number(c.amount) || 0), 0), [otherCharges]);
+  const grand = total + charges;
+
+  const addLine = () => setLines([...lines, { id: uid('ln'), itemId: '', qty: '', rate: '' }]);
+  const updateLine = (id, patch) => setLines(lines.map(l => l.id === id ? { ...l, ...patch } : l));
+  const removeLine = (id) => setLines(lines.length > 1 ? lines.filter(l => l.id !== id) : lines);
+
+  const addCharge = () => setOtherCharges([...otherCharges, { id: uid('ch'), ledgerId: '', amount: '' }]);
+  const updateCharge = (id, patch) => setOtherCharges(otherCharges.map(c => c.id === id ? { ...c, ...patch } : c));
+  const removeCharge = (id) => setOtherCharges(otherCharges.filter(c => c.id !== id));
+
+  // Auto-fill customer details on selection
+  useEffect(() => {
+    if (!customerId) return;
+    const c = state.ledgers.find(l => l.id === customerId);
+    if (c) {
+      setCustomerName(c.name);
+      if (c.address) setAddress(c.address);
+      if (c.contact) setContact(c.contact);
+      if (c.vehicle) setVehicle(c.vehicle);
+    }
+  }, [customerId]);
+
+  const reset = () => {
+    setCustomerId(''); setCustomerName(''); setAddress(''); setContact(''); setVehicle('');
+    setLines([{ id: uid('ln'), itemId: '', qty: '', rate: '' }]);
+    setOtherCharges([]); setNarration('');
+    setSavedVoucher(null);
+    setDate(todayISO());
+  };
+
+  const save = () => {
+    if (!customerName.trim()) { toast('Customer name required'); return; }
+    const validLines = lines.filter(l => l.itemId && Number(l.qty) > 0);
+    if (validLines.length === 0) { toast('Add at least one item'); return; }
+
+    const next = { ...state };
+    // Find/create customer
+    let custLedger = state.ledgers.find(l => l.id === customerId);
+    if (!custLedger) {
+      custLedger = findOrCreateParty(next, customerName, 'g_sundry_dr');
+    } else {
+      // Update party details
+      const idx = next.ledgers.findIndex(l => l.id === custLedger.id);
+      next.ledgers[idx] = { ...custLedger, address, contact, vehicle };
+    }
+
+    const voucherId = uid('vch');
+    const voucherNo = state.counters.sales;
+    const voucher = {
+      id: voucherId, type: 'sales', voucherNo, date,
+      partyId: custLedger.id, partyName: customerName, address, contact, vehicle,
+      lines: validLines.map(l => ({ ...l })),
+      otherCharges: otherCharges.filter(c => c.ledgerId && Number(c.amount) > 0),
+      total, charges, grand, narration,
+      createdAt: Date.now(),
+    };
+    next.vouchers = [...next.vouchers, voucher];
+    next.counters = { ...next.counters, sales: voucherNo + 1 };
+
+    // Ledger entries: Dr Customer, Cr Sales (+ Cr Other charge ledgers)
+    const entries = [
+      { id: uid('le'), voucherId, ledgerId: custLedger.id, dr: grand, cr: 0, date, narration: `Sales — ${customerName}` },
+      { id: uid('le'), voucherId, ledgerId: 'l_sales',     dr: 0, cr: total, date, narration: `Sales — ${customerName}` },
+    ];
+    voucher.otherCharges.forEach(c => {
+      entries.push({ id: uid('le'), voucherId, ledgerId: c.ledgerId, dr: 0, cr: Number(c.amount), date, narration: `Sales charges — ${customerName}` });
+    });
+    next.ledgerEntries = [...next.ledgerEntries, ...entries];
+
+    // Stock entries (sales = OUT)
+    const stockEntries = validLines.map(l => ({
+      id: uid('se'), voucherId, itemId: l.itemId, in: 0, out: Number(l.qty), rate: Number(l.rate), date
+    }));
+    next.stockEntries = [...next.stockEntries, ...stockEntries];
+
+    setState(next);
+    setSavedVoucher(voucher);
+    toast(`Sales #${voucherNo} saved`);
+  };
+
+  if (savedVoucher) {
+    return <VoucherSaved voucher={savedVoucher} state={state} onNew={reset} onPay={() => gotoReceipt(savedVoucher)} />;
+  }
+
+  return (
+    <div>
+      <ScreenHeader title="Sales" voucherNo={next} voucherDate={date} onDateChange={setDate} />
+
+      <div className="grid grid-cols-2 gap-x-8 gap-y-3 mb-4">
+        <div>
+          <label className="smcap text-mute block mb-1">Customer's Name</label>
+          <Picker
+            value={customerId}
+            onChange={(id, opt) => { setCustomerId(id); if (opt) setCustomerName(opt.name); else setCustomerName(''); }}
+            options={customers}
+            placeholder="Type to search or create…"
+            allowCreate
+            onCreate={(name) => {
+              const next = { ...state };
+              const l = findOrCreateParty(next, name, 'g_sundry_dr');
+              setState(next);
+              setCustomerName(name);
+              return l;
+            }}
+            getMeta={(o) => o.contact || o.address || ''}
+            autoFocus
+          />
+        </div>
+        <div>
+          <label className="smcap text-mute block mb-1">Contact</label>
+          <input value={contact} onChange={(e) => setContact(e.target.value)} className="w-full" placeholder="Phone" />
+        </div>
+        <div>
+          <label className="smcap text-mute block mb-1">Address</label>
+          <input value={address} onChange={(e) => setAddress(e.target.value)} className="w-full" placeholder="Address" />
+        </div>
+        <div>
+          <label className="smcap text-mute block mb-1">Vehicle No.</label>
+          <input value={vehicle} onChange={(e) => setVehicle(e.target.value)} className="w-full" placeholder="Optional" />
+        </div>
+      </div>
+
+      <div className="rule mb-4"></div>
+
+      <table className="ledger mb-4">
+        <thead>
+          <tr>
+            <th style={{ width: '50%' }}>Item</th>
+            <th style={{ width: '14%', textAlign: 'right' }}>Qty</th>
+            <th style={{ width: '8%' }}>Unit</th>
+            <th style={{ width: '14%', textAlign: 'right' }}>Rate</th>
+            <th style={{ width: '14%', textAlign: 'right' }}>Total</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {lines.map((l, idx) => {
+            const item = state.items.find(i => i.id === l.itemId);
+            const unit = item ? state.units.find(u => u.id === item.unitId) : null;
+            const lineTotal = (Number(l.qty) || 0) * (Number(l.rate) || 0);
+            const stock = item ? stockBalance(state, item.id) : null;
+            return (
+              <tr key={l.id}>
+                <td>
+                  <Picker
+                    value={l.itemId}
+                    onChange={(id, opt) => {
+                      const patch = { itemId: id };
+                      if (opt && opt.lastSalePrice) patch.rate = opt.lastSalePrice;
+                      updateLine(l.id, patch);
+                    }}
+                    options={state.items}
+                    placeholder="Select item…"
+                    getMeta={(o) => {
+                      const u = state.units.find(u => u.id === o.unitId);
+                      const s = stockBalance(state, o.id);
+                      return `Stock: ${s} ${u?.name || ''} · last sold: ${o.lastSalePrice ? '₹' + inr(o.lastSalePrice) : '—'}`;
+                    }}
+                  />
+                </td>
+                <td><input className="num w-full" value={l.qty} onChange={(e) => updateLine(l.id, { qty: e.target.value })} /></td>
+                <td className="text-mute text-sm">{unit?.name || '—'}</td>
+                <td><input className="num w-full" value={l.rate} onChange={(e) => updateLine(l.id, { rate: e.target.value })} /></td>
+                <td className="num text-right">{inr(lineTotal)}</td>
+                <td>
+                  <button onClick={() => removeLine(l.id)} className="text-mute hover:text-wax px-2">×</button>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+
+      <button onClick={addLine} className="btn btn-ghost mb-6">+ Add Item</button>
+
+      <div className="grid grid-cols-2 gap-8">
+        <div>
+          <div className="smcap text-mute mb-2">Other Charges</div>
+          {otherCharges.map(c => (
+            <div key={c.id} className="flex gap-2 mb-2">
+              <Picker
+                value={c.ledgerId}
+                onChange={(id) => updateCharge(c.id, { ledgerId: id })}
+                options={otherChargeLedgers}
+                placeholder="Tax / Delivery / etc."
+                className="flex-1"
+                allowCreate
+                onCreate={(name) => {
+                  const next = { ...state };
+                  const l = { id: uid('l'), name, groupId: 'g_curr_liab', openingBalance: 0 };
+                  next.ledgers.push(l);
+                  setState(next);
+                  return l;
+                }}
+              />
+              <input className="num w-32" value={c.amount} onChange={(e) => updateCharge(c.id, { amount: e.target.value })} placeholder="0.00" />
+              <button onClick={() => removeCharge(c.id)} className="text-mute hover:text-wax px-2">×</button>
+            </div>
+          ))}
+          <button onClick={addCharge} className="btn btn-ghost text-xs">+ Charge</button>
+
+          <div className="mt-4">
+            <div className="smcap text-mute mb-1">Narration</div>
+            <textarea value={narration} onChange={(e) => setNarration(e.target.value)} rows={2} className="w-full" placeholder="Optional notes…" />
+          </div>
+        </div>
+
+        <div className="bg-paper2/60 border border-rule rounded-sm p-5">
+          <div className="flex justify-between py-2 border-b border-rule">
+            <span className="text-sm">Subtotal</span>
+            <span className="num">{inr(total)}</span>
+          </div>
+          <div className="flex justify-between py-2 border-b border-rule">
+            <span className="text-sm">Other Charges</span>
+            <span className="num">{inr(charges)}</span>
+          </div>
+          <div className="flex justify-between py-3 border-b-2 border-ink">
+            <span className="display text-xl">Grand Total</span>
+            <span className="num text-xl font-semibold">₹ {inr(grand)}</span>
+          </div>
+          <div className="mt-5 flex gap-2 justify-end">
+            <button onClick={reset} className="btn btn-ghost">Clear</button>
+            <button onClick={save} className="btn btn-primary">Save Voucher · ⏎</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function VoucherSaved({ voucher, state, onNew, onPay }) {
+  const allowReceipt = voucher.type === 'sales';
+  return (
+    <div className="max-w-2xl mx-auto py-8">
+      <div className="flex items-center gap-4 mb-4">
+        <div className="seal text-base">Saved</div>
+        <div>
+          <div className="smcap text-mute">{voucher.type}</div>
+          <h2 className="display text-3xl">Voucher #{voucher.voucherNo}</h2>
+          <div className="text-mute text-sm">{fmtDate(voucher.date)} · ₹ {inr(voucher.grand || voucher.amount || 0)}</div>
+        </div>
+      </div>
+      <div className="rule mb-4"></div>
+      <p className="text-sm mb-2"><span className="text-mute">Party · </span>{voucher.partyName || '—'}</p>
+      {voucher.lines && (
+        <div className="text-sm mb-4">
+          {voucher.lines.map((l, i) => {
+            const item = state.items.find(it => it.id === l.itemId);
+            return <div key={i} className="flex justify-between py-1 border-b border-rule">
+              <span>{item?.name || '—'}</span>
+              <span className="num">{l.qty} × ₹{inr(l.rate)} = ₹{inr((Number(l.qty)||0)*(Number(l.rate)||0))}</span>
+            </div>;
+          })}
+        </div>
+      )}
+      <div className="flex gap-2 justify-end">
+        <button onClick={() => window.print()} className="btn btn-ghost">Print</button>
+        {allowReceipt && <button onClick={onPay} className="btn btn-ghost">Settle in Receipt · F4</button>}
+        <button onClick={onNew} className="btn btn-primary">New Voucher</button>
+      </div>
+    </div>
+  );
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// PURCHASES SCREEN
+// ──────────────────────────────────────────────────────────────────────────
+
+function PurchasesScreen({ state, setState, toast }) {
+  const next = state.counters.purchase;
+  const [date, setDate] = useState(todayISO());
+  const [vendorId, setVendorId] = useState('');
+  const [vendorName, setVendorName] = useState('');
+  const [address, setAddress] = useState('');
+  const [contact, setContact] = useState('');
+  const [lines, setLines] = useState([{ id: uid('ln'), itemId: '', qty: '', rate: '' }]);
+  const [narration, setNarration] = useState('');
+  const [saved, setSaved] = useState(null);
+
+  const vendors = useMemo(() => state.ledgers.filter(l => l.groupId === 'g_sundry_cr'), [state.ledgers]);
+  const total = useMemo(() => lines.reduce((s, l) => s + (Number(l.qty) || 0) * (Number(l.rate) || 0), 0), [lines]);
+
+  useEffect(() => {
+    if (!vendorId) return;
+    const v = state.ledgers.find(l => l.id === vendorId);
+    if (v) {
+      setVendorName(v.name);
+      if (v.address) setAddress(v.address);
+      if (v.contact) setContact(v.contact);
+    }
+  }, [vendorId]);
+
+  const reset = () => {
+    setVendorId(''); setVendorName(''); setAddress(''); setContact('');
+    setLines([{ id: uid('ln'), itemId: '', qty: '', rate: '' }]);
+    setNarration(''); setSaved(null); setDate(todayISO());
+  };
+
+  const save = () => {
+    if (!vendorName.trim()) { toast('Vendor name required'); return; }
+    const validLines = lines.filter(l => l.itemId && Number(l.qty) > 0);
+    if (validLines.length === 0) { toast('Add at least one item'); return; }
+
+    const next = { ...state };
+    let v = state.ledgers.find(l => l.id === vendorId);
+    if (!v) v = findOrCreateParty(next, vendorName, 'g_sundry_cr');
+    else {
+      const i = next.ledgers.findIndex(l => l.id === v.id);
+      next.ledgers[i] = { ...v, address, contact };
+    }
+
+    // Update items with last purchase price
+    validLines.forEach(l => {
+      const i = next.items.findIndex(it => it.id === l.itemId);
+      if (i >= 0) next.items[i] = { ...next.items[i], lastPurchasePrice: Number(l.rate) };
+    });
+
+    const voucherId = uid('vch');
+    const voucherNo = state.counters.purchase;
+    const voucher = {
+      id: voucherId, type: 'purchase', voucherNo, date,
+      partyId: v.id, partyName: vendorName, address, contact,
+      lines: validLines.map(l => ({ ...l })),
+      grand: total, narration, createdAt: Date.now(),
+    };
+    next.vouchers = [...next.vouchers, voucher];
+    next.counters = { ...next.counters, purchase: voucherNo + 1 };
+
+    const entries = [
+      { id: uid('le'), voucherId, ledgerId: 'l_purchase', dr: total, cr: 0, date, narration: `Purchase — ${vendorName}` },
+      { id: uid('le'), voucherId, ledgerId: v.id,         dr: 0, cr: total, date, narration: `Purchase — ${vendorName}` },
+    ];
+    next.ledgerEntries = [...next.ledgerEntries, ...entries];
+
+    const stockEntries = validLines.map(l => ({
+      id: uid('se'), voucherId, itemId: l.itemId, in: Number(l.qty), out: 0, rate: Number(l.rate), date
+    }));
+    next.stockEntries = [...next.stockEntries, ...stockEntries];
+
+    setState(next);
+    setSaved(voucher);
+    toast(`Purchase #${voucherNo} saved`);
+  };
+
+  const addLine = () => setLines([...lines, { id: uid('ln'), itemId: '', qty: '', rate: '' }]);
+  const updateLine = (id, patch) => setLines(lines.map(l => l.id === id ? { ...l, ...patch } : l));
+  const removeLine = (id) => setLines(lines.length > 1 ? lines.filter(l => l.id !== id) : lines);
+
+  if (saved) return <VoucherSaved voucher={saved} state={state} onNew={reset} />;
+
+  return (
+    <div>
+      <ScreenHeader title="Purchases" voucherNo={next} voucherDate={date} onDateChange={setDate} />
+
+      <div className="grid grid-cols-2 gap-x-8 gap-y-3 mb-4">
+        <div>
+          <label className="smcap text-mute block mb-1">Vendor's Name</label>
+          <Picker
+            value={vendorId}
+            onChange={(id, opt) => { setVendorId(id); if (opt) setVendorName(opt.name); else setVendorName(''); }}
+            options={vendors}
+            placeholder="Type to search or create…"
+            allowCreate
+            onCreate={(name) => {
+              const next = { ...state };
+              const l = findOrCreateParty(next, name, 'g_sundry_cr');
+              setState(next);
+              setVendorName(name);
+              return l;
+            }}
+            getMeta={(o) => o.contact || o.address || ''}
+            autoFocus
+          />
+        </div>
+        <div>
+          <label className="smcap text-mute block mb-1">Contact</label>
+          <input value={contact} onChange={(e) => setContact(e.target.value)} className="w-full" />
+        </div>
+        <div className="col-span-2">
+          <label className="smcap text-mute block mb-1">Address</label>
+          <input value={address} onChange={(e) => setAddress(e.target.value)} className="w-full" />
+        </div>
+      </div>
+
+      <div className="rule mb-4"></div>
+
+      <table className="ledger mb-4">
+        <thead>
+          <tr>
+            <th style={{ width: '50%' }}>Item</th>
+            <th style={{ width: '14%', textAlign: 'right' }}>Qty</th>
+            <th style={{ width: '8%' }}>Unit</th>
+            <th style={{ width: '14%', textAlign: 'right' }}>Rate</th>
+            <th style={{ width: '14%', textAlign: 'right' }}>Total</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {lines.map((l) => {
+            const item = state.items.find(i => i.id === l.itemId);
+            const unit = item ? state.units.find(u => u.id === item.unitId) : null;
+            const lineTotal = (Number(l.qty) || 0) * (Number(l.rate) || 0);
+            return (
+              <tr key={l.id}>
+                <td>
+                  <Picker
+                    value={l.itemId}
+                    onChange={(id, opt) => {
+                      const patch = { itemId: id };
+                      if (opt && opt.lastPurchasePrice) patch.rate = opt.lastPurchasePrice;
+                      updateLine(l.id, patch);
+                    }}
+                    options={state.items}
+                    placeholder="Select item…"
+                    getMeta={(o) => {
+                      const u = state.units.find(u => u.id === o.unitId);
+                      return `Stock: ${stockBalance(state, o.id)} ${u?.name || ''} · last bought: ${o.lastPurchasePrice ? '₹'+inr(o.lastPurchasePrice) : '—'}`;
+                    }}
+                  />
+                </td>
+                <td><input className="num w-full" value={l.qty} onChange={(e) => updateLine(l.id, { qty: e.target.value })} /></td>
+                <td className="text-mute text-sm">{unit?.name || '—'}</td>
+                <td><input className="num w-full" value={l.rate} onChange={(e) => updateLine(l.id, { rate: e.target.value })} /></td>
+                <td className="num text-right">{inr(lineTotal)}</td>
+                <td><button onClick={() => removeLine(l.id)} className="text-mute hover:text-wax px-2">×</button></td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+      <button onClick={addLine} className="btn btn-ghost mb-6">+ Add Item</button>
+
+      <div className="grid grid-cols-2 gap-8">
+        <div>
+          <div className="smcap text-mute mb-1">Narration</div>
+          <textarea value={narration} onChange={(e) => setNarration(e.target.value)} rows={3} className="w-full" />
+        </div>
+        <div className="bg-paper2/60 border border-rule rounded-sm p-5">
+          <div className="flex justify-between py-3 border-b-2 border-ink">
+            <span className="display text-xl">Total</span>
+            <span className="num text-xl font-semibold">₹ {inr(total)}</span>
+          </div>
+          <div className="mt-5 flex gap-2 justify-end">
+            <button onClick={reset} className="btn btn-ghost">Clear</button>
+            <button onClick={save} className="btn btn-primary">Save Voucher</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// PAYMENT & RECEIPT SCREENS (similar shape, different sign)
+// ──────────────────────────────────────────────────────────────────────────
+
+function PaymentReceiptScreen({ state, setState, toast, mode, prefill }) {
+  // mode: 'PAYMENT' | 'RECEIPT'
+  const isPayment = mode === 'PAYMENT';
+  const counterKey = isPayment ? 'payment' : 'receipt';
+  const next = state.counters[counterKey];
+
+  const [date, setDate] = useState(todayISO());
+  const [accountId, setAccountId] = useState('l_cash');
+  const [partyId, setPartyId] = useState(prefill?.partyId || '');
+  const [partyName, setPartyName] = useState(prefill?.partyName || '');
+  const [otherSide, setOtherSide] = useState(prefill ? 'PARTY' : 'PARTY'); // 'PARTY' or 'OTHER'
+  const [otherLedgerId, setOtherLedgerId] = useState('');
+  const [amount, setAmount] = useState(prefill?.grand ? String(prefill.grand) : '');
+  const [narration, setNarration] = useState(prefill ? `Against Sales #${prefill.voucherNo}` : '');
+  const [saved, setSaved] = useState(null);
+
+  // Available account-type ledgers (Cash / Bank / Bank OD)
+  const accountLedgers = useMemo(() =>
+    state.ledgers.filter(l => ['g_cash', 'g_bank', 'g_bank_od'].includes(l.groupId)), [state.ledgers]);
+
+  // Parties for this mode: payment → vendors (Sundry Creditors); receipt → customers (Sundry Debtors)
+  const partyGroup = isPayment ? 'g_sundry_cr' : 'g_sundry_dr';
+  const parties = useMemo(() => state.ledgers.filter(l => l.groupId === partyGroup), [state.ledgers, partyGroup]);
+
+  // Other-side ledgers: payment → expenses + indirect; receipt → income + other charges
+  const otherLedgers = useMemo(() => state.ledgers.filter(l => {
+    const g = state.groups.find(x => x.id === l.groupId);
+    if (!g) return false;
+    if (isPayment) return g.nature === 'expense' || g.id === 'g_curr_liab' || g.id === 'g_duties' || g.id === 'g_fixed_assets';
+    return g.nature === 'income' || g.id === 'g_curr_liab' || g.id === 'g_duties';
+  }), [state.ledgers, state.groups, isPayment]);
+
+  // For party — show pending balance
+  const partyBal = useMemo(() => {
+    if (!partyId) return null;
+    return ledgerBalance(state, partyId);
+  }, [partyId, state]);
+
+  // Show pending vouchers for the selected party
+  const pendingVouchers = useMemo(() => {
+    if (!partyId) return [];
+    return state.vouchers.filter(v => v.partyId === partyId && (v.type === 'sales' || v.type === 'purchase'))
+      .slice(-5).reverse();
+  }, [partyId, state.vouchers]);
+
+  const reset = () => {
+    setAccountId('l_cash'); setPartyId(''); setPartyName(''); setOtherSide('PARTY');
+    setOtherLedgerId(''); setAmount(''); setNarration(''); setSaved(null); setDate(todayISO());
+  };
+
+  const save = () => {
+    const amt = Number(amount);
+    if (!amt || amt <= 0) { toast('Amount required'); return; }
+    if (otherSide === 'PARTY' && !partyName.trim()) { toast('Party name required'); return; }
+    if (otherSide === 'OTHER' && !otherLedgerId) { toast('Select an expense/income ledger'); return; }
+
+    const next = { ...state };
+    let counterLedgerId;
+    let counterName;
+
+    if (otherSide === 'PARTY') {
+      let p = state.ledgers.find(l => l.id === partyId);
+      if (!p) p = findOrCreateParty(next, partyName, partyGroup);
+      counterLedgerId = p.id;
+      counterName = p.name;
+    } else {
+      counterLedgerId = otherLedgerId;
+      counterName = state.ledgers.find(l => l.id === otherLedgerId)?.name || '';
+    }
+
+    const voucherId = uid('vch');
+    const voucherNo = state.counters[counterKey];
+    const voucher = {
+      id: voucherId, type: isPayment ? 'payment' : 'receipt', voucherNo, date,
+      accountId, partyId: counterLedgerId, partyName: counterName,
+      grand: amt, narration, createdAt: Date.now(),
+    };
+    next.vouchers = [...next.vouchers, voucher];
+    next.counters = { ...next.counters, [counterKey]: voucherNo + 1 };
+
+    // Payment: Dr counter (expense or vendor), Cr account
+    // Receipt: Dr account, Cr counter (customer or income)
+    const entries = isPayment ? [
+      { id: uid('le'), voucherId, ledgerId: counterLedgerId, dr: amt, cr: 0, date, narration: narration || `Payment — ${counterName}` },
+      { id: uid('le'), voucherId, ledgerId: accountId,       dr: 0, cr: amt, date, narration: narration || `Payment — ${counterName}` },
+    ] : [
+      { id: uid('le'), voucherId, ledgerId: accountId,       dr: amt, cr: 0, date, narration: narration || `Receipt — ${counterName}` },
+      { id: uid('le'), voucherId, ledgerId: counterLedgerId, dr: 0, cr: amt, date, narration: narration || `Receipt — ${counterName}` },
+    ];
+    next.ledgerEntries = [...next.ledgerEntries, ...entries];
+
+    setState(next);
+    setSaved(voucher);
+    toast(`${isPayment ? 'Payment' : 'Receipt'} #${voucherNo} saved`);
+  };
+
+  if (saved) return <VoucherSaved voucher={saved} state={state} onNew={reset} />;
+
+  return (
+    <div>
+      <ScreenHeader title={isPayment ? 'Payment' : 'Receipt'} voucherNo={next} voucherDate={date} onDateChange={setDate} />
+
+      <div className="max-w-3xl">
+        <div className="grid grid-cols-2 gap-x-8 gap-y-4 mb-5">
+          <div>
+            <label className="smcap text-mute block mb-1">Account Type</label>
+            <Picker value={accountId} onChange={(id) => setAccountId(id)} options={accountLedgers}
+                    getMeta={(o) => state.groups.find(g => g.id === o.groupId)?.name} />
+          </div>
+          <div>
+            <label className="smcap text-mute block mb-1">Amount</label>
+            <input className="num w-full text-lg" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.00" />
+          </div>
+        </div>
+
+        <div className="bg-paper2/40 border border-rule rounded-sm p-4 mb-4">
+          <div className="flex gap-1 mb-3 text-sm">
+            <button className={`btn ${otherSide === 'PARTY' ? 'btn-primary' : 'btn-ghost'}`} onClick={() => setOtherSide('PARTY')}>
+              {isPayment ? 'Pay Vendor' : 'Receive from Customer'}
+            </button>
+            <span className="text-mute self-center mx-1">or</span>
+            <button className={`btn ${otherSide === 'OTHER' ? 'btn-primary' : 'btn-ghost'}`} onClick={() => setOtherSide('OTHER')}>
+              {isPayment ? 'Direct Expense' : 'Other Income / Charge'}
+            </button>
+          </div>
+
+          {otherSide === 'PARTY' ? (
+            <div>
+              <label className="smcap text-mute block mb-1">{isPayment ? "Vendor's Name" : 'Customer Name'}</label>
+              <Picker
+                value={partyId}
+                onChange={(id, opt) => { setPartyId(id); if (opt) setPartyName(opt.name); else setPartyName(''); }}
+                options={parties}
+                placeholder="Type to search or create…"
+                allowCreate
+                onCreate={(name) => {
+                  const next = { ...state };
+                  const l = findOrCreateParty(next, name, partyGroup);
+                  setState(next); setPartyName(name);
+                  return l;
+                }}
+                getMeta={(o) => {
+                  const b = ledgerBalance(state, o.id);
+                  return b.amount > 0 ? `Pending: ₹${inr(b.amount)} ${b.side === 'cr' ? 'Cr (you owe)' : 'Dr (owes you)'}` : 'No balance';
+                }}
+              />
+
+              {partyBal && partyBal.amount > 0 && (
+                <div className="mt-3 px-3 py-2 bg-paper border border-rule rounded-sm">
+                  <div className="flex justify-between text-sm">
+                    <span className="smcap text-mute">{isPayment ? 'Outstanding to vendor' : 'Outstanding from customer'}</span>
+                    <span className="num font-semibold">₹ {inr(partyBal.amount)} {partyBal.side === 'cr' ? 'Cr' : 'Dr'}</span>
+                  </div>
+                  {pendingVouchers.length > 0 && (
+                    <div className="mt-2 text-xs text-mute">
+                      Recent: {pendingVouchers.map(v => `#${v.voucherNo} (${fmtDate(v.date)} ₹${inr(v.grand)})`).join(' · ')}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          ) : (
+            <div>
+              <label className="smcap text-mute block mb-1">{isPayment ? 'Expense Ledger' : 'Income / Charge Ledger'}</label>
+              <Picker
+                value={otherLedgerId}
+                onChange={(id) => setOtherLedgerId(id)}
+                options={otherLedgers}
+                placeholder="Select or create…"
+                allowCreate
+                onCreate={(name) => {
+                  const next = { ...state };
+                  const groupId = isPayment ? 'g_indirect_exp' : 'g_indirect_inc';
+                  const l = { id: uid('l'), name, groupId, openingBalance: 0 };
+                  next.ledgers.push(l); setState(next);
+                  return l;
+                }}
+                getMeta={(o) => state.groups.find(g => g.id === o.groupId)?.name}
+              />
+              <p className="text-xs text-mute mt-1 italic">List of {isPayment ? 'expenses' : 'charges'} created in Masters · F7</p>
+            </div>
+          )}
+        </div>
+
+        <div className="mb-4">
+          <label className="smcap text-mute block mb-1">Narration</label>
+          <textarea value={narration} onChange={(e) => setNarration(e.target.value)} rows={2} className="w-full" placeholder="Type anything…" />
+        </div>
+
+        <div className="flex gap-2 justify-end">
+          <button onClick={reset} className="btn btn-ghost">Clear</button>
+          <button onClick={save} className="btn btn-primary">Save Voucher</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// JOURNAL SCREEN
+// ──────────────────────────────────────────────────────────────────────────
+
+function JournalScreen({ state, setState, toast }) {
+  const next = state.counters.journal;
+  const [date, setDate] = useState(todayISO());
+  const [drId, setDrId] = useState('');
+  const [crId, setCrId] = useState('');
+  const [amount, setAmount] = useState('');
+  const [narration, setNarration] = useState('');
+  const [saved, setSaved] = useState(null);
+
+  const reset = () => { setDrId(''); setCrId(''); setAmount(''); setNarration(''); setSaved(null); setDate(todayISO()); };
+
+  const save = () => {
+    if (!drId || !crId) { toast('Select both Dr and Cr ledgers'); return; }
+    if (drId === crId) { toast('Dr and Cr must differ'); return; }
+    const amt = Number(amount);
+    if (!amt || amt <= 0) { toast('Amount required'); return; }
+
+    const next = { ...state };
+    const voucherId = uid('vch');
+    const voucherNo = state.counters.journal;
+    const drName = state.ledgers.find(l => l.id === drId)?.name;
+    const crName = state.ledgers.find(l => l.id === crId)?.name;
+    const voucher = {
+      id: voucherId, type: 'journal', voucherNo, date,
+      drId, crId, drName, crName, grand: amt, narration, createdAt: Date.now(),
+    };
+    next.vouchers = [...next.vouchers, voucher];
+    next.counters = { ...next.counters, journal: voucherNo + 1 };
+
+    const entries = [
+      { id: uid('le'), voucherId, ledgerId: drId, dr: amt, cr: 0, date, narration },
+      { id: uid('le'), voucherId, ledgerId: crId, dr: 0, cr: amt, date, narration },
+    ];
+    next.ledgerEntries = [...next.ledgerEntries, ...entries];
+
+    setState(next);
+    setSaved(voucher);
+    toast(`Journal #${voucherNo} saved`);
+  };
+
+  if (saved) return <VoucherSaved voucher={saved} state={state} onNew={reset} />;
+
+  return (
+    <div className="max-w-3xl">
+      <ScreenHeader title="Journal" voucherNo={next} voucherDate={date} onDateChange={setDate} />
+
+      <p className="text-sm text-mute italic mb-5">Follow the basic laws of accounting. Every Dr has its Cr.</p>
+
+      <div className="grid grid-cols-[80px_1fr_1fr] gap-x-3 gap-y-3 items-center mb-4">
+        <div className="smcap text-wax">By / Dr</div>
+        <Picker value={drId} onChange={setDrId} options={state.ledgers}
+                getMeta={(o) => state.groups.find(g => g.id === o.groupId)?.name}
+                placeholder="Debit ledger…" />
+        <input className="num" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="Amount" />
+
+        <div className="smcap text-wax">To / Cr</div>
+        <Picker value={crId} onChange={setCrId} options={state.ledgers}
+                getMeta={(o) => state.groups.find(g => g.id === o.groupId)?.name}
+                placeholder="Credit ledger…" />
+        <div className="num text-right text-mute">{amount && `₹ ${inr(Number(amount))}`}</div>
+      </div>
+
+      <div className="mb-5">
+        <div className="smcap text-mute mb-1">Narration</div>
+        <textarea value={narration} onChange={(e) => setNarration(e.target.value)} rows={2} className="w-full" placeholder="Can type anything…" />
+      </div>
+
+      <div className="flex gap-2 justify-end">
+        <button onClick={reset} className="btn btn-ghost">Clear</button>
+        <button onClick={save} className="btn btn-primary">Save Voucher</button>
+      </div>
+    </div>
+  );
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// MASTERS — Accounts & Inventory
+// ──────────────────────────────────────────────────────────────────────────
+
+function MastersScreen({ state, setState, toast }) {
+  const [tab, setTab] = useState('accounts');
+  return (
+    <div>
+      <ScreenHeader title="Masters" />
+      <div className="border-b border-rule mb-5 flex gap-1">
+        <button onClick={() => setTab('accounts')} className={`px-4 py-2 text-sm font-semibold border-b-2 ${tab === 'accounts' ? 'border-wax text-wax' : 'border-transparent text-mute hover:text-ink'}`}>
+          Accounts Master
+        </button>
+        <button onClick={() => setTab('inventory')} className={`px-4 py-2 text-sm font-semibold border-b-2 ${tab === 'inventory' ? 'border-wax text-wax' : 'border-transparent text-mute hover:text-ink'}`}>
+          Inventory Master
+        </button>
+      </div>
+      {tab === 'accounts' ? <AccountsMaster state={state} setState={setState} toast={toast} /> : <InventoryMaster state={state} setState={setState} toast={toast} />}
+    </div>
+  );
+}
+
+function AccountsMaster({ state, setState, toast }) {
+  const [editing, setEditing] = useState(null); // null | { id, name, groupId, openingBalance, contact, address }
+  const [showGroupList, setShowGroupList] = useState(false);
+
+  const groupOf = (gid) => state.groups.find(g => g.id === gid);
+  const ledgersByGroup = useMemo(() => {
+    const map = {};
+    state.groups.forEach(g => map[g.id] = []);
+    state.ledgers.forEach(l => { if (map[l.groupId]) map[l.groupId].push(l); });
+    return map;
+  }, [state.ledgers, state.groups]);
+
+  const create = () => setEditing({ id: '', name: '', groupId: '', openingBalance: '', contact: '', address: '' });
+  const editL = (l) => setEditing({ ...l, openingBalance: String(l.openingBalance || '') });
+
+  const remove = (l) => {
+    if (l.locked) { toast('System ledger cannot be deleted'); return; }
+    const used = state.ledgerEntries.some(e => e.ledgerId === l.id) || state.vouchers.some(v => v.partyId === l.id);
+    if (used) { toast('Ledger has transactions — cannot delete'); return; }
+    if (!confirm(`Delete ledger "${l.name}"?`)) return;
+    setState({ ...state, ledgers: state.ledgers.filter(x => x.id !== l.id) });
+    toast('Ledger deleted');
+  };
+
+  const save = () => {
+    if (!editing.name.trim()) { toast('Name required'); return; }
+    if (!editing.groupId) { toast('Select a group'); return; }
+    const next = { ...state };
+    if (editing.id) {
+      const i = next.ledgers.findIndex(l => l.id === editing.id);
+      next.ledgers[i] = { ...next.ledgers[i], name: editing.name.trim(), groupId: editing.groupId, openingBalance: Number(editing.openingBalance) || 0, contact: editing.contact, address: editing.address };
+    } else {
+      next.ledgers.push({ id: uid('l'), name: editing.name.trim(), groupId: editing.groupId, openingBalance: Number(editing.openingBalance) || 0, contact: editing.contact, address: editing.address });
+    }
+    setState(next); setEditing(null); toast('Ledger saved');
+  };
+
+  return (
+    <div>
+      <div className="flex gap-2 mb-4">
+        <button onClick={create} className="btn btn-primary">+ Create Ledger</button>
+        <button onClick={() => setShowGroupList(true)} className="btn btn-ghost">View 19 Predefined Groups</button>
+      </div>
+
+      <div className="grid grid-cols-2 gap-x-8 gap-y-2">
+        {state.groups.map(g => (
+          <div key={g.id} className="mb-3">
+            <div className="flex items-baseline justify-between border-b border-rule pb-1 mb-1">
+              <span className="smcap text-ink2">{g.name}</span>
+              <span className="text-xs text-mute italic">{g.nature}</span>
+            </div>
+            {ledgersByGroup[g.id]?.length === 0 && <div className="text-xs text-mute italic py-1">— no ledgers —</div>}
+            {ledgersByGroup[g.id]?.map(l => {
+              const bal = ledgerBalance(state, l.id);
+              return (
+                <div key={l.id} className="group flex items-center justify-between py-1 hover:bg-paper2/40 px-1 rounded-sm">
+                  <span className="text-sm flex items-center gap-2">
+                    {l.name}
+                    {l.locked && <span className="chip text-[10px]">system</span>}
+                  </span>
+                  <span className="flex items-center gap-3">
+                    <span className="num text-xs text-mute">{bal.amount > 0 ? `₹${inr(bal.amount)} ${bal.side}` : '—'}</span>
+                    <button onClick={() => editL(l)} className="opacity-0 group-hover:opacity-100 text-xs text-wax">Edit</button>
+                    {!l.locked && <button onClick={() => remove(l)} className="opacity-0 group-hover:opacity-100 text-xs text-mute hover:text-wax">×</button>}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        ))}
+      </div>
+
+      <Modal open={!!editing} onClose={() => setEditing(null)} title={editing?.id ? 'Alter Ledger' : 'Create Ledger'}
+             footer={<>
+               <button onClick={() => setEditing(null)} className="btn btn-ghost">Cancel</button>
+               <button onClick={save} className="btn btn-primary">Save</button>
+             </>}>
+        {editing && (
+          <div className="space-y-3">
+            <div>
+              <label className="smcap text-mute block mb-1">Ledger Name</label>
+              <input value={editing.name} onChange={(e) => setEditing({ ...editing, name: e.target.value })} className="w-full" autoFocus />
+            </div>
+            <div>
+              <label className="smcap text-mute block mb-1">Select Group</label>
+              <select value={editing.groupId} onChange={(e) => setEditing({ ...editing, groupId: e.target.value })} className="w-full">
+                <option value="">— select —</option>
+                {state.groups.map(g => <option key={g.id} value={g.id}>{g.name} ({g.nature})</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="smcap text-mute block mb-1">Opening Balance</label>
+              <input className="num w-full" value={editing.openingBalance} onChange={(e) => setEditing({ ...editing, openingBalance: e.target.value })} placeholder="0.00" />
+              <p className="text-xs text-mute mt-1 italic">Sign follows the group's natural side: assets/expenses Dr, liabilities/income Cr.</p>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="smcap text-mute block mb-1">Contact</label>
+                <input value={editing.contact || ''} onChange={(e) => setEditing({ ...editing, contact: e.target.value })} className="w-full" placeholder="Optional" />
+              </div>
+              <div>
+                <label className="smcap text-mute block mb-1">Address</label>
+                <input value={editing.address || ''} onChange={(e) => setEditing({ ...editing, address: e.target.value })} className="w-full" placeholder="Optional" />
+              </div>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      <Modal open={showGroupList} onClose={() => setShowGroupList(false)} title="Predefined Ledger Groups">
+        <p className="text-sm text-mute italic mb-3">These 19 groups are predefined and follow the basic laws of accounting. They cannot be deleted.</p>
+        <table className="ledger">
+          <thead><tr><th>#</th><th>Group</th><th>Nature</th></tr></thead>
+          <tbody>
+            {state.groups.map((g, i) => (
+              <tr key={g.id}><td className="num text-mute">{i+1}</td><td>{g.name}</td><td className="text-mute italic">{g.nature}</td></tr>
+            ))}
+          </tbody>
+        </table>
+      </Modal>
+    </div>
+  );
+}
+
+function InventoryMaster({ state, setState, toast }) {
+  const [editingItem, setEditingItem] = useState(null);
+  const [editingUnit, setEditingUnit] = useState(null);
+  const [editingSuper, setEditingSuper] = useState(null);
+  const [editingSub, setEditingSub] = useState(null);
+
+  const saveItem = () => {
+    if (!editingItem.name.trim()) { toast('Item name required'); return; }
+    const next = { ...state };
+    if (editingItem.id) {
+      const i = next.items.findIndex(x => x.id === editingItem.id);
+      next.items[i] = { ...next.items[i], ...editingItem, openingBalance: Number(editingItem.openingBalance) || 0 };
+    } else {
+      next.items.push({ id: uid('it'), ...editingItem, openingBalance: Number(editingItem.openingBalance) || 0 });
+    }
+    setState(next); setEditingItem(null); toast('Item saved');
+  };
+
+  const removeItem = (it) => {
+    const used = state.stockEntries.some(e => e.itemId === it.id);
+    if (used) { toast('Item has transactions — cannot delete'); return; }
+    if (!confirm(`Delete item "${it.name}"?`)) return;
+    setState({ ...state, items: state.items.filter(x => x.id !== it.id) });
+  };
+
+  const saveUnit = () => {
+    if (!editingUnit.name.trim()) return;
+    const next = { ...state };
+    if (editingUnit.id) {
+      const i = next.units.findIndex(u => u.id === editingUnit.id);
+      next.units[i] = { ...next.units[i], name: editingUnit.name.trim() };
+    } else {
+      next.units.push({ id: uid('u'), name: editingUnit.name.trim() });
+    }
+    setState(next); setEditingUnit(null);
+  };
+  const saveSuper = () => {
+    if (!editingSuper.name.trim()) return;
+    const next = { ...state };
+    if (editingSuper.id) {
+      const i = next.superCategories.findIndex(s => s.id === editingSuper.id);
+      next.superCategories[i] = { ...next.superCategories[i], name: editingSuper.name.trim() };
+    } else {
+      next.superCategories.push({ id: uid('sc'), name: editingSuper.name.trim() });
+    }
+    setState(next); setEditingSuper(null);
+  };
+  const saveSub = () => {
+    if (!editingSub.name.trim()) return;
+    const next = { ...state };
+    if (editingSub.id) {
+      const i = next.subCategories.findIndex(s => s.id === editingSub.id);
+      next.subCategories[i] = { ...next.subCategories[i], name: editingSub.name.trim(), superCategoryId: editingSub.superCategoryId };
+    } else {
+      next.subCategories.push({ id: uid('sb'), name: editingSub.name.trim(), superCategoryId: editingSub.superCategoryId });
+    }
+    setState(next); setEditingSub(null);
+  };
+
+  return (
+    <div className="grid grid-cols-3 gap-6">
+      {/* Units */}
+      <div>
+        <div className="flex justify-between items-baseline mb-2">
+          <h3 className="display text-lg">Units</h3>
+          <button onClick={() => setEditingUnit({ id: '', name: '' })} className="text-wax text-sm">+ Create</button>
+        </div>
+        <div className="border border-rule rounded-sm overflow-hidden">
+          {state.units.map(u => (
+            <div key={u.id} className="px-3 py-2 border-b border-rule last:border-b-0 flex justify-between items-center hover:bg-paper2/40 group">
+              <span className="text-sm">{u.name}</span>
+              <span className="opacity-0 group-hover:opacity-100 flex gap-2">
+                <button onClick={() => setEditingUnit(u)} className="text-xs text-wax">Edit</button>
+                <button onClick={() => {
+                  if (state.items.some(i => i.unitId === u.id)) { toast('Unit in use'); return; }
+                  if (confirm('Delete?')) setState({ ...state, units: state.units.filter(x => x.id !== u.id) });
+                }} className="text-xs text-mute hover:text-wax">×</button>
+              </span>
+            </div>
+          ))}
+          {state.units.length === 0 && <div className="px-3 py-4 text-center text-mute text-sm italic">No units yet</div>}
+        </div>
+      </div>
+
+      {/* Super Categories */}
+      <div>
+        <div className="flex justify-between items-baseline mb-2">
+          <h3 className="display text-lg">Super Categories</h3>
+          <button onClick={() => setEditingSuper({ id: '', name: '' })} className="text-wax text-sm">+ Create</button>
+        </div>
+        <div className="border border-rule rounded-sm overflow-hidden">
+          {state.superCategories.map(s => (
+            <div key={s.id} className="px-3 py-2 border-b border-rule last:border-b-0 flex justify-between items-center hover:bg-paper2/40 group">
+              <span className="text-sm">{s.name}</span>
+              <span className="opacity-0 group-hover:opacity-100 flex gap-2">
+                <button onClick={() => setEditingSuper(s)} className="text-xs text-wax">Edit</button>
+                <button onClick={() => {
+                  if (state.items.some(i => i.superCategoryId === s.id) || state.subCategories.some(sb => sb.superCategoryId === s.id)) { toast('Category in use'); return; }
+                  if (confirm('Delete?')) setState({ ...state, superCategories: state.superCategories.filter(x => x.id !== s.id) });
+                }} className="text-xs text-mute hover:text-wax">×</button>
+              </span>
+            </div>
+          ))}
+          {state.superCategories.length === 0 && <div className="px-3 py-4 text-center text-mute text-sm italic">None yet</div>}
+        </div>
+      </div>
+
+      {/* Sub Categories */}
+      <div>
+        <div className="flex justify-between items-baseline mb-2">
+          <h3 className="display text-lg">Sub Categories</h3>
+          <button onClick={() => setEditingSub({ id: '', name: '', superCategoryId: '' })} className="text-wax text-sm">+ Create</button>
+        </div>
+        <div className="border border-rule rounded-sm overflow-hidden">
+          {state.subCategories.map(s => {
+            const sup = state.superCategories.find(x => x.id === s.superCategoryId);
+            return (
+              <div key={s.id} className="px-3 py-2 border-b border-rule last:border-b-0 flex justify-between items-center hover:bg-paper2/40 group">
+                <span className="text-sm">{s.name} <span className="text-mute text-xs">/ {sup?.name || '—'}</span></span>
+                <span className="opacity-0 group-hover:opacity-100 flex gap-2">
+                  <button onClick={() => setEditingSub(s)} className="text-xs text-wax">Edit</button>
+                  <button onClick={() => {
+                    if (state.items.some(i => i.subCategoryId === s.id)) { toast('Sub-cat in use'); return; }
+                    if (confirm('Delete?')) setState({ ...state, subCategories: state.subCategories.filter(x => x.id !== s.id) });
+                  }} className="text-xs text-mute hover:text-wax">×</button>
+                </span>
+              </div>
+            );
+          })}
+          {state.subCategories.length === 0 && <div className="px-3 py-4 text-center text-mute text-sm italic">None yet</div>}
+        </div>
+      </div>
+
+      {/* Items */}
+      <div className="col-span-3 mt-4">
+        <div className="flex justify-between items-baseline mb-2">
+          <h3 className="display text-xl">Items</h3>
+          <button onClick={() => setEditingItem({ id: '', name: '', unitId: '', superCategoryId: '', subCategoryId: '', openingBalance: '', lastSalePrice: '', lastPurchasePrice: '' })}
+                  className="btn btn-primary">+ Create Item</button>
+        </div>
+        <table className="ledger">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Unit</th>
+              <th>Super Cat.</th>
+              <th>Sub Cat.</th>
+              <th style={{ textAlign: 'right' }}>Opening</th>
+              <th style={{ textAlign: 'right' }}>Stock</th>
+              <th style={{ textAlign: 'right' }}>Last Sold</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {state.items.map(it => {
+              const unit = state.units.find(u => u.id === it.unitId);
+              const sup = state.superCategories.find(s => s.id === it.superCategoryId);
+              const sub = state.subCategories.find(s => s.id === it.subCategoryId);
+              const stk = stockBalance(state, it.id);
+              return (
+                <tr key={it.id} className="group">
+                  <td className="font-medium">{it.name}</td>
+                  <td>{unit?.name || '—'}</td>
+                  <td className="text-mute">{sup?.name || '—'}</td>
+                  <td className="text-mute">{sub?.name || '—'}</td>
+                  <td className="num text-right">{Number(it.openingBalance) || 0}</td>
+                  <td className="num text-right font-semibold">{stk}</td>
+                  <td className="num text-right text-mute">{it.lastSalePrice ? '₹'+inr(it.lastSalePrice) : '—'}</td>
+                  <td className="text-right">
+                    <button onClick={() => setEditingItem({ ...it, openingBalance: String(it.openingBalance || '') })} className="opacity-0 group-hover:opacity-100 text-wax text-xs mr-2">Edit</button>
+                    <button onClick={() => removeItem(it)} className="opacity-0 group-hover:opacity-100 text-mute hover:text-wax text-xs">×</button>
+                  </td>
+                </tr>
+              );
+            })}
+            {state.items.length === 0 && (
+              <tr><td colSpan="8" className="text-center text-mute italic py-8">No items yet — click Create Item to add your first product</td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Modals */}
+      <Modal open={!!editingUnit} onClose={() => setEditingUnit(null)} title={editingUnit?.id ? 'Alter Unit' : 'Create Unit'}
+             footer={<><button onClick={() => setEditingUnit(null)} className="btn btn-ghost">Cancel</button><button onClick={saveUnit} className="btn btn-primary">Save</button></>}>
+        {editingUnit && <input value={editingUnit.name} onChange={(e) => setEditingUnit({ ...editingUnit, name: e.target.value })} className="w-full" placeholder="Unit name (e.g. Kg)" autoFocus />}
+      </Modal>
+
+      <Modal open={!!editingSuper} onClose={() => setEditingSuper(null)} title={editingSuper?.id ? 'Alter Super Category' : 'Create Super Category'}
+             footer={<><button onClick={() => setEditingSuper(null)} className="btn btn-ghost">Cancel</button><button onClick={saveSuper} className="btn btn-primary">Save</button></>}>
+        {editingSuper && <input value={editingSuper.name} onChange={(e) => setEditingSuper({ ...editingSuper, name: e.target.value })} className="w-full" placeholder="e.g. Spare Parts" autoFocus />}
+      </Modal>
+
+      <Modal open={!!editingSub} onClose={() => setEditingSub(null)} title={editingSub?.id ? 'Alter Sub Category' : 'Create Sub Category'}
+             footer={<><button onClick={() => setEditingSub(null)} className="btn btn-ghost">Cancel</button><button onClick={saveSub} className="btn btn-primary">Save</button></>}>
+        {editingSub && (
+          <div className="space-y-3">
+            <input value={editingSub.name} onChange={(e) => setEditingSub({ ...editingSub, name: e.target.value })} className="w-full" placeholder="e.g. Bengali" autoFocus />
+            <select value={editingSub.superCategoryId} onChange={(e) => setEditingSub({ ...editingSub, superCategoryId: e.target.value })} className="w-full">
+              <option value="">— Super Category —</option>
+              {state.superCategories.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+            </select>
+          </div>
+        )}
+      </Modal>
+
+      <Modal open={!!editingItem} onClose={() => setEditingItem(null)} title={editingItem?.id ? 'Alter Item' : 'Create Item'}
+             footer={<><button onClick={() => setEditingItem(null)} className="btn btn-ghost">Cancel</button><button onClick={saveItem} className="btn btn-primary">Save</button></>}>
+        {editingItem && (
+          <div className="space-y-3">
+            <div>
+              <label className="smcap text-mute block mb-1">Item Name</label>
+              <input value={editingItem.name} onChange={(e) => setEditingItem({ ...editingItem, name: e.target.value })} className="w-full" autoFocus />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="smcap text-mute block mb-1">Unit</label>
+                <select value={editingItem.unitId} onChange={(e) => setEditingItem({ ...editingItem, unitId: e.target.value })} className="w-full">
+                  <option value="">— Unit —</option>
+                  {state.units.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="smcap text-mute block mb-1">Opening Balance</label>
+                <input className="num w-full" value={editingItem.openingBalance} onChange={(e) => setEditingItem({ ...editingItem, openingBalance: e.target.value })} placeholder="0" />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="smcap text-mute block mb-1">Super Category</label>
+                <select value={editingItem.superCategoryId} onChange={(e) => setEditingItem({ ...editingItem, superCategoryId: e.target.value, subCategoryId: '' })} className="w-full">
+                  <option value="">— None —</option>
+                  {state.superCategories.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="smcap text-mute block mb-1">Sub Category</label>
+                <select value={editingItem.subCategoryId} onChange={(e) => setEditingItem({ ...editingItem, subCategoryId: e.target.value })} className="w-full">
+                  <option value="">— None —</option>
+                  {state.subCategories.filter(s => !editingItem.superCategoryId || s.superCategoryId === editingItem.superCategoryId).map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                </select>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="smcap text-mute block mb-1">Default Sale Price</label>
+                <input className="num w-full" value={editingItem.lastSalePrice || ''} onChange={(e) => setEditingItem({ ...editingItem, lastSalePrice: e.target.value })} placeholder="0.00" />
+              </div>
+              <div>
+                <label className="smcap text-mute block mb-1">Default Purchase Price</label>
+                <input className="num w-full" value={editingItem.lastPurchasePrice || ''} onChange={(e) => setEditingItem({ ...editingItem, lastPurchasePrice: e.target.value })} placeholder="0.00" />
+              </div>
+            </div>
+          </div>
+        )}
+      </Modal>
+    </div>
+  );
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// REPORTS
+// ──────────────────────────────────────────────────────────────────────────
+
+const REPORT_LIST = [
+  { id: 'sales',     name: 'Sales Reports' },
+  { id: 'itemsales', name: 'Item-wise Sales Reports' },
+  { id: 'gp',        name: 'Gross Profit Reports' },
+  { id: 'vendor',    name: 'Vendor Analysis Reports' },
+  { id: 'stock',     name: 'Stock Summary' },
+  { id: 'bs',        name: 'Balance Sheet' },
+  { id: 'pl',        name: 'Profit & Loss Account' },
+  { id: 'cf',        name: 'Cash Flow Statement' },
+];
+
+function ReportsScreen({ state }) {
+  const [active, setActive] = useState('sales');
+  const [from, setFrom] = useState(state.meta.fyStart || `${new Date().getFullYear()}-04-01`);
+  const [to, setTo] = useState(todayISO());
+
+  return (
+    <div>
+      <ScreenHeader title="Reports" right={
+        <div className="flex gap-3 items-center">
+          <label className="text-sm flex items-center gap-2"><span className="smcap text-mute">From</span><input type="date" value={from} onChange={(e) => setFrom(e.target.value)} /></label>
+          <label className="text-sm flex items-center gap-2"><span className="smcap text-mute">To</span><input type="date" value={to} onChange={(e) => setTo(e.target.value)} /></label>
+        </div>
+      } />
+
+      <div className="grid grid-cols-[220px_1fr] gap-6">
+        <div>
+          {REPORT_LIST.map(r => (
+            <button key={r.id} onClick={() => setActive(r.id)}
+                    className={`block w-full text-left px-3 py-2 text-sm border-l-2 ${active === r.id ? 'border-wax text-wax bg-paper2/60 font-semibold' : 'border-transparent text-ink2 hover:bg-paper2/40'}`}>
+              {r.name}
+            </button>
+          ))}
+        </div>
+        <div className="bg-paper border border-rule rounded-sm p-5">
+          {active === 'sales'     && <SalesReport state={state} from={from} to={to} />}
+          {active === 'itemsales' && <ItemSalesReport state={state} from={from} to={to} />}
+          {active === 'gp'        && <GrossProfitReport state={state} from={from} to={to} />}
+          {active === 'vendor'    && <VendorAnalysisReport state={state} from={from} to={to} />}
+          {active === 'stock'     && <StockSummary state={state} from={from} to={to} />}
+          {active === 'bs'        && <BalanceSheet state={state} asOf={to} />}
+          {active === 'pl'        && <ProfitLoss state={state} from={from} to={to} />}
+          {active === 'cf'        && <CashFlow state={state} from={from} to={to} />}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function inRange(date, from, to) {
+  return date >= from && date <= to;
+}
+
+function SalesReport({ state, from, to }) {
+  const sales = state.vouchers.filter(v => v.type === 'sales' && inRange(v.date, from, to));
+  const total = sales.reduce((s, v) => s + (v.grand || 0), 0);
+  // Daily totals for chart
+  const byDay = {};
+  sales.forEach(v => { byDay[v.date] = (byDay[v.date] || 0) + (v.grand || 0); });
+  const chartData = Object.keys(byDay).sort().map(d => ({ date: d.slice(5), amount: byDay[d] }));
+
+  return (
+    <div>
+      <div className="flex justify-between items-baseline mb-3">
+        <h3 className="display text-2xl">Sales Reports</h3>
+        <div className="text-right"><div className="smcap text-mute">Total</div><div className="num text-2xl font-semibold">₹ {inr(total)}</div></div>
+      </div>
+      {chartData.length > 0 && ChartsAvailable && (
+        <div className="h-48 mb-5">
+          <ResponsiveContainer>
+            <BarChart data={chartData}>
+              <CartesianGrid strokeDasharray="2 4" stroke="#c2b791" />
+              <XAxis dataKey="date" tick={{ fontSize: 10, fill: '#7a7464' }} />
+              <YAxis tick={{ fontSize: 10, fill: '#7a7464' }} />
+              <Tooltip contentStyle={{ background: '#f5efe1', border: '1px solid #c2b791', borderRadius: 2, fontSize: 12 }} formatter={(v) => '₹ ' + inr(v)} />
+              <Bar dataKey="amount" fill="#7a1f2b" />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+      <table className="ledger">
+        <thead><tr><th>Date</th><th>Voucher</th><th>Customer</th><th style={{textAlign:'right'}}>Amount</th></tr></thead>
+        <tbody>
+          {sales.length === 0 && <tr><td colSpan="4" className="text-mute italic py-6 text-center">No sales in this range</td></tr>}
+          {sales.map(v => (
+            <tr key={v.id}>
+              <td className="num text-mute">{fmtDate(v.date)}</td>
+              <td className="num">#{v.voucherNo}</td>
+              <td>{v.partyName}</td>
+              <td className="num text-right">₹ {inr(v.grand)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function ItemSalesReport({ state, from, to }) {
+  const tally = {};
+  state.stockEntries.forEach(e => {
+    if (!inRange(e.date, from, to)) return;
+    if (e.out === 0) return;
+    if (!tally[e.itemId]) tally[e.itemId] = { qty: 0, amount: 0 };
+    tally[e.itemId].qty += Number(e.out) || 0;
+    tally[e.itemId].amount += (Number(e.out) || 0) * (Number(e.rate) || 0);
+  });
+  const rows = Object.keys(tally).map(itemId => {
+    const item = state.items.find(i => i.id === itemId);
+    const unit = item ? state.units.find(u => u.id === item.unitId) : null;
+    return { id: itemId, name: item?.name || 'Unknown', unit: unit?.name || '', qty: tally[itemId].qty, amount: tally[itemId].amount };
+  }).sort((a, b) => b.amount - a.amount);
+  const totalAmount = rows.reduce((s, r) => s + r.amount, 0);
+
+  const top = rows.slice(0, 7);
+
+  return (
+    <div>
+      <h3 className="display text-2xl mb-3">Item-wise Sales</h3>
+      {top.length > 0 && ChartsAvailable && (
+        <div className="h-56 mb-5">
+          <ResponsiveContainer>
+            <BarChart data={top} layout="vertical" margin={{ left: 80 }}>
+              <CartesianGrid strokeDasharray="2 4" stroke="#c2b791" />
+              <XAxis type="number" tick={{ fontSize: 10, fill: '#7a7464' }} />
+              <YAxis type="category" dataKey="name" tick={{ fontSize: 10, fill: '#3d3a36' }} width={120} />
+              <Tooltip contentStyle={{ background: '#f5efe1', border: '1px solid #c2b791', borderRadius: 2, fontSize: 12 }} formatter={(v) => '₹ ' + inr(v)} />
+              <Bar dataKey="amount" fill="#7a1f2b" />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+      <table className="ledger">
+        <thead><tr><th>Item</th><th>Unit</th><th style={{textAlign:'right'}}>Qty Sold</th><th style={{textAlign:'right'}}>Amount</th><th style={{textAlign:'right'}}>%</th></tr></thead>
+        <tbody>
+          {rows.length === 0 && <tr><td colSpan="5" className="text-mute italic py-6 text-center">No sales</td></tr>}
+          {rows.map(r => (
+            <tr key={r.id}>
+              <td>{r.name}</td>
+              <td className="text-mute">{r.unit}</td>
+              <td className="num text-right">{r.qty}</td>
+              <td className="num text-right">₹ {inr(r.amount)}</td>
+              <td className="num text-right text-mute">{totalAmount ? ((r.amount/totalAmount)*100).toFixed(1) : '0'}%</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function GrossProfitReport({ state, from, to }) {
+  // For each sales line, find avg cost from purchases
+  const itemAvgCost = {};
+  state.items.forEach(it => {
+    const purchases = state.stockEntries.filter(e => e.itemId === it.id && e.in > 0);
+    if (purchases.length === 0) {
+      itemAvgCost[it.id] = Number(it.lastPurchasePrice) || 0;
+    } else {
+      const totQty = purchases.reduce((s, p) => s + p.in, 0);
+      const totVal = purchases.reduce((s, p) => s + p.in * p.rate, 0);
+      itemAvgCost[it.id] = totQty ? totVal / totQty : 0;
+    }
+  });
+  const sales = state.vouchers.filter(v => v.type === 'sales' && inRange(v.date, from, to));
+  const rows = [];
+  let totalSales = 0, totalCogs = 0;
+  sales.forEach(v => {
+    let saleAmt = 0, cogs = 0;
+    v.lines?.forEach(l => {
+      const amt = (Number(l.qty) || 0) * (Number(l.rate) || 0);
+      saleAmt += amt;
+      cogs += (Number(l.qty) || 0) * (itemAvgCost[l.itemId] || 0);
+    });
+    totalSales += saleAmt;
+    totalCogs += cogs;
+    rows.push({ id: v.id, no: v.voucherNo, date: v.date, party: v.partyName, sale: saleAmt, cogs, gp: saleAmt - cogs });
+  });
+  const gp = totalSales - totalCogs;
+  const margin = totalSales ? (gp / totalSales) * 100 : 0;
+
+  return (
+    <div>
+      <div className="flex justify-between items-baseline mb-3">
+        <h3 className="display text-2xl">Gross Profit · Sales − COGS</h3>
+        <div className="text-right">
+          <div className="smcap text-mute">Gross Profit</div>
+          <div className="num text-2xl font-semibold">₹ {inr(gp)}</div>
+          <div className="num text-xs text-mute">{margin.toFixed(1)}% margin</div>
+        </div>
+      </div>
+      <div className="grid grid-cols-3 gap-3 mb-5">
+        <div className="bg-paper2/50 border border-rule p-3 rounded-sm"><div className="smcap text-mute">Sales</div><div className="num text-xl">₹ {inr(totalSales)}</div></div>
+        <div className="bg-paper2/50 border border-rule p-3 rounded-sm"><div className="smcap text-mute">COGS</div><div className="num text-xl">₹ {inr(totalCogs)}</div></div>
+        <div className="bg-paper2/50 border border-rule p-3 rounded-sm"><div className="smcap text-mute">Gross Profit</div><div className="num text-xl text-ok">₹ {inr(gp)}</div></div>
+      </div>
+      <table className="ledger">
+        <thead><tr><th>Date</th><th>Voucher</th><th>Customer</th><th style={{textAlign:'right'}}>Sale</th><th style={{textAlign:'right'}}>COGS</th><th style={{textAlign:'right'}}>GP</th></tr></thead>
+        <tbody>
+          {rows.length === 0 && <tr><td colSpan="6" className="text-mute italic py-6 text-center">No sales</td></tr>}
+          {rows.map(r => (
+            <tr key={r.id}>
+              <td className="num text-mute">{fmtDate(r.date)}</td>
+              <td className="num">#{r.no}</td>
+              <td>{r.party}</td>
+              <td className="num text-right">₹ {inr(r.sale)}</td>
+              <td className="num text-right text-mute">₹ {inr(r.cogs)}</td>
+              <td className="num text-right font-semibold">₹ {inr(r.gp)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function VendorAnalysisReport({ state, from, to }) {
+  const tally = {};
+  state.vouchers.filter(v => v.type === 'purchase' && inRange(v.date, from, to)).forEach(v => {
+    if (!tally[v.partyId]) tally[v.partyId] = { name: v.partyName, count: 0, amount: 0 };
+    tally[v.partyId].count += 1;
+    tally[v.partyId].amount += v.grand || 0;
+  });
+  const rows = Object.keys(tally).map(id => ({
+    id, ...tally[id], balance: ledgerBalance(state, id),
+  })).sort((a, b) => b.amount - a.amount);
+  const total = rows.reduce((s, r) => s + r.amount, 0);
+
+  return (
+    <div>
+      <h3 className="display text-2xl mb-3">Vendor Analysis</h3>
+      <table className="ledger">
+        <thead><tr><th>Vendor</th><th style={{textAlign:'right'}}>Bills</th><th style={{textAlign:'right'}}>Total</th><th style={{textAlign:'right'}}>%</th><th style={{textAlign:'right'}}>Outstanding</th></tr></thead>
+        <tbody>
+          {rows.length === 0 && <tr><td colSpan="5" className="text-mute italic py-6 text-center">No purchases in range</td></tr>}
+          {rows.map(r => (
+            <tr key={r.id}>
+              <td>{r.name}</td>
+              <td className="num text-right">{r.count}</td>
+              <td className="num text-right">₹ {inr(r.amount)}</td>
+              <td className="num text-right text-mute">{total ? ((r.amount/total)*100).toFixed(1) : '0'}%</td>
+              <td className="num text-right">{r.balance.amount > 0 ? `₹ ${inr(r.balance.amount)} ${r.balance.side}` : '—'}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function StockSummary({ state, from, to }) {
+  const rows = state.items.map(it => {
+    const opening = (() => {
+      let bal = Number(it.openingBalance) || 0;
+      state.stockEntries.forEach(e => {
+        if (e.itemId !== it.id) return;
+        if (e.date < from) bal += (Number(e.in) || 0) - (Number(e.out) || 0);
+      });
+      return bal;
+    })();
+    let inQty = 0, outQty = 0;
+    state.stockEntries.forEach(e => {
+      if (e.itemId !== it.id) return;
+      if (!inRange(e.date, from, to)) return;
+      inQty += Number(e.in) || 0;
+      outQty += Number(e.out) || 0;
+    });
+    const closing = opening + inQty - outQty;
+    const unit = state.units.find(u => u.id === it.unitId);
+    return { id: it.id, name: it.name, unit: unit?.name || '', opening, inQty, outQty, closing };
+  });
+
+  return (
+    <div>
+      <h3 className="display text-2xl mb-3">Stock Summary</h3>
+      <table className="ledger">
+        <thead><tr><th>Item</th><th>Unit</th><th style={{textAlign:'right'}}>Opening</th><th style={{textAlign:'right'}}>Inward</th><th style={{textAlign:'right'}}>Outward</th><th style={{textAlign:'right'}}>Closing</th></tr></thead>
+        <tbody>
+          {rows.length === 0 && <tr><td colSpan="6" className="text-mute italic py-6 text-center">No items</td></tr>}
+          {rows.map(r => (
+            <tr key={r.id}>
+              <td className="font-medium">{r.name}</td>
+              <td className="text-mute">{r.unit}</td>
+              <td className="num text-right">{r.opening}</td>
+              <td className="num text-right text-ok">+{r.inQty}</td>
+              <td className="num text-right text-wax">−{r.outQty}</td>
+              <td className="num text-right font-semibold">{r.closing}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function summarizeByGroup(state, asOfDate) {
+  const sums = {};
+  state.groups.forEach(g => sums[g.id] = { group: g, total: 0, ledgers: [] });
+  state.ledgers.forEach(l => {
+    const bal = ledgerBalance(state, l.id, asOfDate);
+    if (!sums[l.groupId]) return;
+    sums[l.groupId].ledgers.push({ ...l, balance: bal });
+    // Asset/expense natural side is Dr — positive when Dr balance.
+    // For BS we want signed totals:
+    const g = sums[l.groupId].group;
+    const naturalDr = g.nature === 'asset' || g.nature === 'expense';
+    const signed = bal.side === 'dr' ? bal.amount : -bal.amount;
+    sums[l.groupId].total += naturalDr ? signed : -signed;
+  });
+  return sums;
+}
+
+function BalanceSheet({ state, asOf }) {
+  const sums = summarizeByGroup(state, asOf);
+
+  // P&L for capital adjustment
+  const incomeGroups = state.groups.filter(g => g.nature === 'income').map(g => g.id);
+  const expenseGroups = state.groups.filter(g => g.nature === 'expense').map(g => g.id);
+  let income = 0, expense = 0;
+  incomeGroups.forEach(gid => income += sums[gid].total);
+  expenseGroups.forEach(gid => expense += sums[gid].total);
+  const profit = income - expense;
+
+  const liabilityGroups = state.groups.filter(g => g.nature === 'liability');
+  const assetGroups = state.groups.filter(g => g.nature === 'asset');
+
+  const totalLiab = liabilityGroups.reduce((s, g) => s + sums[g.id].total, 0) + profit;
+  const totalAsset = assetGroups.reduce((s, g) => s + sums[g.id].total, 0);
+
+  return (
+    <div>
+      <div className="flex justify-between items-baseline mb-3">
+        <h3 className="display text-2xl">Balance Sheet</h3>
+        <span className="text-mute text-sm">as of {fmtDate(asOf)}</span>
+      </div>
+      <div className="grid grid-cols-2 gap-6">
+        <div>
+          <h4 className="smcap text-wax mb-2 border-b border-rule pb-1">Liabilities</h4>
+          {liabilityGroups.map(g => sums[g.id].total !== 0 && (
+            <div key={g.id} className="mb-3">
+              <div className="flex justify-between text-sm font-semibold border-b border-rule pb-1">
+                <span>{g.name}</span><span className="num">₹ {inr(sums[g.id].total)}</span>
+              </div>
+              {sums[g.id].ledgers.map(l => l.balance.amount > 0 && (
+                <div key={l.id} className="flex justify-between text-xs text-mute pl-3 py-0.5">
+                  <span>{l.name}</span><span className="num">₹ {inr(l.balance.side === 'cr' ? l.balance.amount : -l.balance.amount)}</span>
+                </div>
+              ))}
+            </div>
+          ))}
+          {profit !== 0 && (
+            <div className="mb-3">
+              <div className="flex justify-between text-sm font-semibold border-b border-rule pb-1">
+                <span>Profit & Loss A/c {profit >= 0 ? '(Profit)' : '(Loss)'}</span><span className="num">₹ {inr(profit)}</span>
+              </div>
+            </div>
+          )}
+          <div className="flex justify-between border-t-2 border-ink pt-2 mt-3 font-semibold">
+            <span className="display">Total</span><span className="num">₹ {inr(totalLiab)}</span>
+          </div>
+        </div>
+        <div>
+          <h4 className="smcap text-wax mb-2 border-b border-rule pb-1">Assets</h4>
+          {assetGroups.map(g => sums[g.id].total !== 0 && (
+            <div key={g.id} className="mb-3">
+              <div className="flex justify-between text-sm font-semibold border-b border-rule pb-1">
+                <span>{g.name}</span><span className="num">₹ {inr(sums[g.id].total)}</span>
+              </div>
+              {sums[g.id].ledgers.map(l => l.balance.amount > 0 && (
+                <div key={l.id} className="flex justify-between text-xs text-mute pl-3 py-0.5">
+                  <span>{l.name}</span><span className="num">₹ {inr(l.balance.side === 'dr' ? l.balance.amount : -l.balance.amount)}</span>
+                </div>
+              ))}
+            </div>
+          ))}
+          <div className="flex justify-between border-t-2 border-ink pt-2 mt-3 font-semibold">
+            <span className="display">Total</span><span className="num">₹ {inr(totalAsset)}</span>
+          </div>
+        </div>
+      </div>
+      {Math.abs(totalLiab - totalAsset) > 0.01 && (
+        <div className="mt-4 text-xs text-wax italic text-center">
+          Difference: ₹ {inr(totalLiab - totalAsset)} — review opening balances or unposted transactions.
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ProfitLoss({ state, from, to }) {
+  // Sum entries within range by group (for income/expense)
+  const sums = {};
+  state.groups.forEach(g => sums[g.id] = { group: g, total: 0, ledgers: {} });
+  state.ledgerEntries.forEach(e => {
+    if (!inRange(e.date, from, to)) return;
+    const l = state.ledgers.find(x => x.id === e.ledgerId);
+    if (!l) return;
+    const g = state.groups.find(g => g.id === l.groupId);
+    if (!g) return;
+    if (g.nature !== 'income' && g.nature !== 'expense') return;
+    const sums_g = sums[l.groupId];
+    if (!sums_g.ledgers[l.id]) sums_g.ledgers[l.id] = { name: l.name, dr: 0, cr: 0 };
+    sums_g.ledgers[l.id].dr += Number(e.dr) || 0;
+    sums_g.ledgers[l.id].cr += Number(e.cr) || 0;
+    if (g.nature === 'income') sums_g.total += (Number(e.cr) || 0) - (Number(e.dr) || 0);
+    else                       sums_g.total += (Number(e.dr) || 0) - (Number(e.cr) || 0);
+  });
+
+  const incomeGroups = state.groups.filter(g => g.nature === 'income');
+  const expenseGroups = state.groups.filter(g => g.nature === 'expense');
+  const totalInc = incomeGroups.reduce((s, g) => s + sums[g.id].total, 0);
+  const totalExp = expenseGroups.reduce((s, g) => s + sums[g.id].total, 0);
+  const profit = totalInc - totalExp;
+
+  return (
+    <div>
+      <div className="flex justify-between items-baseline mb-3">
+        <h3 className="display text-2xl">Profit & Loss Account</h3>
+        <div className="text-right">
+          <div className="smcap text-mute">Net {profit >= 0 ? 'Profit' : 'Loss'}</div>
+          <div className={`num text-2xl font-semibold ${profit >= 0 ? 'text-ok' : 'text-wax'}`}>₹ {inr(Math.abs(profit))}</div>
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-6">
+        <div>
+          <h4 className="smcap text-wax mb-2 border-b border-rule pb-1">Expenses</h4>
+          {expenseGroups.map(g => sums[g.id].total !== 0 && (
+            <div key={g.id} className="mb-3">
+              <div className="flex justify-between text-sm font-semibold border-b border-rule pb-1">
+                <span>{g.name}</span><span className="num">₹ {inr(sums[g.id].total)}</span>
+              </div>
+              {Object.values(sums[g.id].ledgers).map((l, i) => (
+                <div key={i} className="flex justify-between text-xs text-mute pl-3 py-0.5">
+                  <span>{l.name}</span><span className="num">₹ {inr(l.dr - l.cr)}</span>
+                </div>
+              ))}
+            </div>
+          ))}
+          {profit > 0 && <div className="flex justify-between font-semibold mb-2"><span>Net Profit c/d</span><span className="num">₹ {inr(profit)}</span></div>}
+          <div className="flex justify-between border-t-2 border-ink pt-2 font-semibold">
+            <span className="display">Total</span><span className="num">₹ {inr(totalExp + Math.max(profit, 0))}</span>
+          </div>
+        </div>
+        <div>
+          <h4 className="smcap text-wax mb-2 border-b border-rule pb-1">Incomes</h4>
+          {incomeGroups.map(g => sums[g.id].total !== 0 && (
+            <div key={g.id} className="mb-3">
+              <div className="flex justify-between text-sm font-semibold border-b border-rule pb-1">
+                <span>{g.name}</span><span className="num">₹ {inr(sums[g.id].total)}</span>
+              </div>
+              {Object.values(sums[g.id].ledgers).map((l, i) => (
+                <div key={i} className="flex justify-between text-xs text-mute pl-3 py-0.5">
+                  <span>{l.name}</span><span className="num">₹ {inr(l.cr - l.dr)}</span>
+                </div>
+              ))}
+            </div>
+          ))}
+          {profit < 0 && <div className="flex justify-between font-semibold mb-2"><span>Net Loss c/d</span><span className="num">₹ {inr(-profit)}</span></div>}
+          <div className="flex justify-between border-t-2 border-ink pt-2 font-semibold">
+            <span className="display">Total</span><span className="num">₹ {inr(totalInc + Math.max(-profit, 0))}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function CashFlow({ state, from, to }) {
+  const cashLedgers = state.ledgers.filter(l =>
+    l.groupId === 'g_cash' || l.groupId === 'g_bank' || l.groupId === 'g_bank_od'
+  );
+  const cashLedgerIds = cashLedgers.map(l => l.id);
+  const flows = [];
+  state.ledgerEntries.forEach(e => {
+    if (!inRange(e.date, from, to)) return;
+    if (!cashLedgerIds.includes(e.ledgerId)) return;
+    flows.push(e);
+  });
+  flows.sort((a, b) => a.date.localeCompare(b.date));
+  let opening = 0;
+  cashLedgers.forEach(l => {
+    let b = Number(l.openingBalance) || 0;
+    state.ledgerEntries.forEach(e => {
+      if (e.ledgerId !== l.id) return;
+      if (e.date < from) b += (Number(e.dr) || 0) - (Number(e.cr) || 0);
+    });
+    opening += b;
+  });
+  const inflow = flows.reduce((s, e) => s + (Number(e.dr) || 0), 0);
+  const outflow = flows.reduce((s, e) => s + (Number(e.cr) || 0), 0);
+  const closing = opening + inflow - outflow;
+
+  return (
+    <div>
+      <h3 className="display text-2xl mb-3">Cash Flow Statement</h3>
+      <div className="grid grid-cols-4 gap-3 mb-5">
+        <div className="bg-paper2/50 border border-rule p-3 rounded-sm"><div className="smcap text-mute">Opening</div><div className="num text-lg">₹ {inr(opening)}</div></div>
+        <div className="bg-paper2/50 border border-rule p-3 rounded-sm"><div className="smcap text-mute">Inflow</div><div className="num text-lg text-ok">+₹ {inr(inflow)}</div></div>
+        <div className="bg-paper2/50 border border-rule p-3 rounded-sm"><div className="smcap text-mute">Outflow</div><div className="num text-lg text-wax">−₹ {inr(outflow)}</div></div>
+        <div className="bg-paper2/50 border border-rule p-3 rounded-sm"><div className="smcap text-mute">Closing</div><div className="num text-lg font-semibold">₹ {inr(closing)}</div></div>
+      </div>
+      <table className="ledger">
+        <thead><tr><th>Date</th><th>Account</th><th>Narration</th><th style={{textAlign:'right'}}>Inflow</th><th style={{textAlign:'right'}}>Outflow</th></tr></thead>
+        <tbody>
+          {flows.length === 0 && <tr><td colSpan="5" className="text-mute italic py-6 text-center">No cash movements</td></tr>}
+          {flows.map(e => {
+            const l = state.ledgers.find(x => x.id === e.ledgerId);
+            return (
+              <tr key={e.id}>
+                <td className="num text-mute">{fmtDate(e.date)}</td>
+                <td>{l?.name}</td>
+                <td className="text-sm text-ink2">{e.narration}</td>
+                <td className="num text-right text-ok">{e.dr ? '+₹ ' + inr(e.dr) : ''}</td>
+                <td className="num text-right text-wax">{e.cr ? '−₹ ' + inr(e.cr) : ''}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// HOT KEYS SIDEBAR
+// ──────────────────────────────────────────────────────────────────────────
+
+function HotKeysSidebar({ active, onSwitch }) {
+  return (
+    <aside className="bg-paper2/40 border-l border-rule2 px-4 py-5 w-[200px] no-print">
+      <div className="flex items-center justify-between border-b border-rule2 pb-3 mb-3">
+        <span className="smcap text-mute">Hot Keys</span>
+        <span className="text-[10px] text-mute italic">F1—F7</span>
+      </div>
+      <div className="space-y-1">
+        {SCREEN_LIST.map(key => {
+          const s = SCREENS[key];
+          const isActive = active === key;
+          return (
+            <button key={key} onClick={() => onSwitch(key)}
+                    className={`w-full text-left flex items-center justify-between px-3 py-2 rounded-sm transition-all ${isActive ? 'bg-ink text-paper' : 'hover:bg-paper hover:border-rule border border-transparent'}`}>
+              <span className="text-sm font-medium">{s.label}</span>
+              <span className={isActive ? 'keypaper' : 'key'}>{s.hot}</span>
+            </button>
+          );
+        })}
+      </div>
+      <div className="mt-6 pt-4 border-t border-rule2">
+        <p className="text-xs text-mute italic leading-relaxed">
+          Press a function key anywhere to jump screens. Sales is the default.
+        </p>
+      </div>
+    </aside>
+  );
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// AUTH GATE — Login screen (email/password)
+// ──────────────────────────────────────────────────────────────────────────
+
+function LoginScreen({ onError }) {
+  const [email, setEmail] = useState('');
+  const [pwd, setPwd] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+
+  const submit = async (e) => {
+    e && e.preventDefault();
+    if (!email.trim() || !pwd) { setErr('Enter email and password'); return; }
+    if (!cloudReady()) { setErr('Cloud connection unavailable. Check internet.'); return; }
+    setErr(''); setBusy(true);
+    try {
+      await fbAuth().signInWithEmailAndPassword(email.trim(), pwd);
+      // onAuthStateChanged in App takes over
+    } catch (e2) {
+      const code = (e2 && e2.code) || '';
+      let msg = 'Sign in failed';
+      if (code === 'auth/invalid-email')              msg = 'Invalid email format';
+      else if (code === 'auth/user-not-found')        msg = 'No such user';
+      else if (code === 'auth/wrong-password' ||
+               code === 'auth/invalid-credential' ||
+               code === 'auth/invalid-login-credentials') msg = 'Wrong email or password';
+      else if (code === 'auth/too-many-requests')     msg = 'Too many attempts — wait a minute';
+      else if (code === 'auth/network-request-failed') msg = 'No internet';
+      setErr(msg);
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="min-h-screen flex items-center justify-center px-4">
+      <div className="bg-paper border border-rule rounded-sm shadow-sm w-full max-w-sm p-8"
+           style={{ boxShadow: '0 1px 0 rgba(255,253,247,0.6) inset, 0 8px 24px rgba(60,40,20,0.10)' }}>
+        <div className="flex flex-col items-center mb-6">
+          <div className="seal text-base mb-3">BC</div>
+          <h1 className="display text-2xl leading-none">Bike Care</h1>
+          <div className="text-xs text-mute italic mt-1">V1.0 · Sign in to your books</div>
+        </div>
+        <form onSubmit={submit} className="space-y-3">
+          <div>
+            <label className="smcap text-mute block mb-1">Email</label>
+            <input
+              type="email" autoFocus autoComplete="username" className="w-full"
+              value={email} onChange={(e) => setEmail(e.target.value)}
+              disabled={busy}
+            />
+          </div>
+          <div>
+            <label className="smcap text-mute block mb-1">Password</label>
+            <input
+              type="password" autoComplete="current-password" className="w-full"
+              value={pwd} onChange={(e) => setPwd(e.target.value)}
+              disabled={busy}
+            />
+          </div>
+          {err && <div className="text-xs text-wax italic">{err}</div>}
+          <button type="submit" className="btn btn-primary w-full mt-2" disabled={busy}>
+            {busy ? 'Signing in…' : 'Sign In'}
+          </button>
+        </form>
+        <p className="text-[11px] text-mute italic text-center mt-5 leading-relaxed">
+          Forgot password? Reset it from the Firebase console.<br/>
+          Stays signed in on this device until you sign out.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// SYNC STATUS PILL (footer indicator)
+// ──────────────────────────────────────────────────────────────────────────
+
+function SyncStatusPill({ status, lastSyncAt }) {
+  const map = {
+    idle:    { color: '#3a6a3e', label: 'synced' },
+    syncing: { color: '#a07a2a', label: 'syncing…' },
+    offline: { color: '#7a7464', label: 'offline (cached)' },
+    error:   { color: '#7a1f2b', label: 'sync error' },
+    local:   { color: '#7a7464', label: 'local only' },
+  };
+  const s = map[status] || map.idle;
+  const ago = lastSyncAt ? `· ${Math.max(0, Math.round((Date.now() - lastSyncAt)/1000))}s ago` : '';
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      <span style={{ width: 8, height: 8, borderRadius: 999, background: s.color, display: 'inline-block' }}></span>
+      <span style={{ color: s.color }}>{s.label}</span>
+      {status === 'idle' && lastSyncAt && <span className="text-mute">{ago}</span>}
+    </span>
+  );
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// BACKUPS MODAL — daily snapshot history (Tier 3 viewer)
+// ──────────────────────────────────────────────────────────────────────────
+
+function BackupsModal({ open, onClose, onRestore, onView, toast }) {
+  const [snaps, setSnaps] = useState(loadSnapshots());
+
+  useEffect(() => { if (open) setSnaps(loadSnapshots()); }, [open]);
+
+  const refresh = () => setSnaps(loadSnapshots());
+
+  const handlePin = (date, pinned) => { pinSnapshot(date, pinned); refresh(); };
+  const handleDelete = (date) => {
+    if (!confirm(`Delete snapshot from ${fmtDate(date)}?`)) return;
+    deleteSnapshot(date); refresh(); toast('Snapshot deleted');
+  };
+  const handleDownload = (snap) => {
+    try {
+      const blob = new Blob([snap.payload], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = `bikecare-erp-${snap.date}.json`;
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (e) { toast('Download failed'); }
+  };
+  const handleView = (snap) => {
+    try { onView(JSON.parse(snap.payload), snap.date); }
+    catch (e) { toast('Snapshot corrupted'); }
+  };
+  const handleRestore = (snap) => {
+    if (!confirm(`Restore the books to their state on ${fmtDate(snap.date)}?\n\nThis will overwrite current data on this device AND in the cloud. (Today's snapshot is taken automatically before this happens.)`)) return;
+    if (!confirm('Really restore? Last chance to cancel.')) return;
+    try {
+      const data = JSON.parse(snap.payload);
+      onRestore(normalizeState(data));
+      toast(`Restored to ${fmtDate(snap.date)}`);
+      onClose();
+    } catch (e) { toast('Restore failed — snapshot corrupted'); }
+  };
+
+  return (
+    <Modal open={open} onClose={onClose} title="Daily Snapshots — In-app history"
+           footer={<button onClick={onClose} className="btn btn-ghost">Close</button>}>
+      {snaps.length === 0 ? (
+        <p className="text-mute italic text-sm py-6 text-center">
+          No snapshots yet. One is taken automatically each day on the first save.
+        </p>
+      ) : (
+        <>
+          <p className="text-xs text-mute italic mb-3">
+            Snapshots are stored on this device. Most recent {SNAPSHOT_LIMIT} days are kept; pinned snapshots are kept indefinitely.
+          </p>
+          <table className="ledger">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th style={{textAlign:'right'}}>Vouchers</th>
+                <th style={{textAlign:'right'}}>Sales</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {snaps.map(s => (
+                <tr key={s.date}>
+                  <td>
+                    <span className="num">{fmtDate(s.date)}</span>
+                    {s.pinned && <span className="chip ml-2" title="Pinned"
+                      style={{ background: 'rgba(160,122,42,0.18)', color: '#7a5a1a' }}>★ pinned</span>}
+                  </td>
+                  <td className="num text-right">{s.voucherCount}</td>
+                  <td className="num text-right">₹ {inr(s.totalSales)}</td>
+                  <td className="text-right whitespace-nowrap">
+                    <button className="btn btn-ghost text-[10px] px-2 py-0.5 mr-1" onClick={() => handleView(s)}>View</button>
+                    <button className="btn btn-ghost text-[10px] px-2 py-0.5 mr-1" onClick={() => handleDownload(s)}>⬇</button>
+                    <button className="btn btn-ghost text-[10px] px-2 py-0.5 mr-1" onClick={() => handlePin(s.date, !s.pinned)}>{s.pinned ? '☆' : '★'}</button>
+                    <button className="btn btn-ghost text-[10px] px-2 py-0.5 mr-1" onClick={() => handleRestore(s)}>Restore</button>
+                    <button className="btn btn-danger text-[10px] px-2 py-0.5" onClick={() => handleDelete(s.date)}>×</button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </>
+      )}
+    </Modal>
+  );
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// SNAPSHOT VIEWER — read-only window into a past day's books
+// ──────────────────────────────────────────────────────────────────────────
+
+function SnapshotViewer({ snapshot, snapshotDate, onClose }) {
+  const [scr, setScr] = useState('REPORTS');
+  if (!snapshot) return null;
+  return (
+    <div className="modal-bg" onClick={(e) => { if (e.target.className === 'modal-bg') onClose(); }}>
+      <div className="modal-card" style={{ maxWidth: '1200px', height: '90vh', display: 'flex', flexDirection: 'column' }}>
+        <div className="border-b border-rule2 px-5 py-3 flex items-center justify-between" style={{ background: 'rgba(160,122,42,0.10)' }}>
+          <div className="flex items-center gap-3">
+            <span className="chip" style={{ background: 'rgba(160,122,42,0.25)', color: '#7a5a1a', fontWeight: 600 }}>
+              READ-ONLY · SNAPSHOT
+            </span>
+            <span className="display text-lg">Books as on {fmtDate(snapshotDate)}</span>
+          </div>
+          <div className="flex items-center gap-2">
+            {['REPORTS','MASTERS'].map(k => (
+              <button key={k} onClick={() => setScr(k)}
+                      className={`btn ${scr === k ? 'btn-primary' : 'btn-ghost'} text-xs`}>
+                {k === 'REPORTS' ? 'Reports' : 'Masters'}
+              </button>
+            ))}
+            <button onClick={onClose} className="btn btn-ghost text-xs">Close ✕</button>
+          </div>
+        </div>
+        <div className="flex-1 overflow-auto px-6 py-5">
+          {scr === 'REPORTS' && <ReportsScreen state={snapshot} />}
+          {scr === 'MASTERS' && <MastersScreen state={snapshot} setState={() => {}} toast={() => {}} />}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// APP SHELL
+// ──────────────────────────────────────────────────────────────────────────
+
+function App() {
+  const [state, setStateRaw] = useState(loadStateLocal);
+  const [screen, setScreen] = useState('SALES');
+  const [toastMsg, setToastMsg] = useState('');
+  const [receiptPrefill, setReceiptPrefill] = useState(null);
+  const [showSettings, setShowSettings] = useState(false);
+  const [showBackups, setShowBackups] = useState(false);
+  const [viewingSnap, setViewingSnap] = useState(null); // { snapshot, date }
+
+  // Auth: 'loading' | 'login' | 'ready' | 'local-fallback'
+  const [authPhase, setAuthPhase] = useState(() => cloudReady() ? 'loading' : 'local-fallback');
+  const [user, setUser] = useState(null);
+
+  // Sync: 'idle' | 'syncing' | 'offline' | 'error' | 'local'
+  const [syncStatus, setSyncStatus] = useState(cloudReady() ? 'syncing' : 'local');
+  const [lastSyncAt, setLastSyncAt] = useState(0);
+  const [autoDownload, setAutoDownload] = useState(() => localStorage.getItem(AUTO_DL_PREF_KEY) === '1');
+
+  const debounceRef = useRef(null);
+  const lastWrittenPayloadRef = useRef(null);  // Last payload we wrote to Firestore
+  const lastReceivedPayloadRef = useRef(null); // Last payload received from listener
+  const initializedRef = useRef(false);
+
+  const toast = useCallback((m) => setToastMsg(m), []);
+
+  // ── Auth listener ────────────────────────────────────────────────────────
+  useEffect(() => {
+    if (!cloudReady()) return;
+    const unsub = fbAuth().onAuthStateChanged((u) => {
+      setUser(u);
+      setAuthPhase(u ? 'ready' : 'login');
+    }, (err) => {
+      console.error('Auth listener error:', err);
+      setAuthPhase('local-fallback');
+    });
+    return unsub;
+  }, []);
+
+  // ── Firestore real-time subscription ─────────────────────────────────────
+  useEffect(() => {
+    if (!cloudReady() || !user) return;
+    const ref = fbDB().doc(FIRESTORE_DOC_PATH);
+
+    const unsub = ref.onSnapshot(
+      (snap) => {
+        const fromCache = snap.metadata && snap.metadata.fromCache;
+        if (snap.exists) {
+          const data = snap.data();
+          const payload = data && data.payload;
+          if (payload) {
+            // Skip if it's our own write echoing back
+            if (lastWrittenPayloadRef.current === payload) {
+              setSyncStatus(fromCache ? 'offline' : 'idle');
+              setLastSyncAt(Date.now());
+              initializedRef.current = true;
+              return;
+            }
+            // Skip if identical to what we already have
+            if (lastReceivedPayloadRef.current === payload) {
+              setSyncStatus(fromCache ? 'offline' : 'idle');
+              return;
+            }
+            try {
+              const remote = normalizeState(JSON.parse(payload));
+              lastReceivedPayloadRef.current = payload;
+              setStateRaw(remote);
+              saveStateLocal(remote);
+              captureSnapshotIfNeeded(remote);
+              if (!initializedRef.current) {
+                triggerDailyAutoDownload(remote);
+                initializedRef.current = true;
+              }
+            } catch (e) {
+              console.error('Failed to parse Firestore payload', e);
+            }
+          }
+        } else {
+          // First time — push current local state to seed Firestore
+          if (!initializedRef.current) {
+            const seed = JSON.stringify(state);
+            ref.set({
+              payload: seed,
+              updatedAt: fbNS().firestore.FieldValue.serverTimestamp(),
+              updatedBy: user.email || 'unknown',
+              version: 1,
+            }).then(() => {
+              lastWrittenPayloadRef.current = seed;
+              initializedRef.current = true;
+            }).catch(err => console.error('Seed write failed:', err));
+          }
+        }
+        setSyncStatus(fromCache ? 'offline' : 'idle');
+        setLastSyncAt(Date.now());
+      },
+      (err) => {
+        console.error('Firestore listen error:', err);
+        setSyncStatus('error');
+      }
+    );
+    return unsub;
+  }, [user]); // eslint-disable-line
+
+  // ── setState — write-through to local + (debounced) Firestore ────────────
+  const setState = useCallback((s) => {
+    setStateRaw(prev => {
+      const next = typeof s === 'function' ? s(prev) : s;
+      // Mirror to localStorage immediately (instant cache, offline survival)
+      saveStateLocal(next);
+      // Capture daily snapshot if it's a new day
+      captureSnapshotIfNeeded(next);
+
+      if (cloudReady() && user) {
+        setSyncStatus('syncing');
+        if (debounceRef.current) clearTimeout(debounceRef.current);
+        debounceRef.current = setTimeout(() => {
+          const payload = JSON.stringify(next);
+          // Avoid no-op writes
+          if (lastWrittenPayloadRef.current === payload) {
+            setSyncStatus('idle');
+            return;
+          }
+          fbDB().doc(FIRESTORE_DOC_PATH).set({
+            payload,
+            updatedAt: fbNS().firestore.FieldValue.serverTimestamp(),
+            updatedBy: (user && user.email) || 'unknown',
+            version: 1,
+          }).then(() => {
+            lastWrittenPayloadRef.current = payload;
+            setSyncStatus('idle');
+            setLastSyncAt(Date.now());
+          }).catch(err => {
+            console.error('Firestore write failed:', err);
+            setSyncStatus('error');
+          });
+        }, 500);
+      }
+      return next;
+    });
+  }, [user]);
+
+  // ── F-key navigation, global ─────────────────────────────────────────────
+  useEffect(() => {
+    const onKey = (e) => {
+      const fkeys = { 'F1': 'PURCHASES', 'F2': 'SALES', 'F3': 'PAYMENT', 'F4': 'RECEIPT', 'F5': 'JOURNAL', 'F6': 'REPORTS', 'F7': 'MASTERS' };
+      if (fkeys[e.key]) {
+        e.preventDefault();
+        if (authPhase === 'login' || authPhase === 'loading') return;
+        if (viewingSnap) return;
+        setScreen(fkeys[e.key]);
+        if (fkeys[e.key] !== 'RECEIPT') setReceiptPrefill(null);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [authPhase, viewingSnap]);
+
+  const switchScreen = (key) => {
+    setScreen(key);
+    if (key !== 'RECEIPT') setReceiptPrefill(null);
+  };
+
+  const gotoReceipt = (salesVoucher) => {
+    setReceiptPrefill(salesVoucher);
+    setScreen('RECEIPT');
+  };
+
+  const exportData = () => {
+    const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = `bikecare-erp-${todayISO()}.json`;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    toast('Exported');
+  };
+
+  const importData = (file) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const data = normalizeState(JSON.parse(reader.result));
+        setState(data);
+        toast('Data imported');
+      } catch (e) { toast('Invalid file'); }
+    };
+    reader.readAsText(file);
+  };
+
+  const wipeAll = () => {
+    if (!confirm('This will erase ALL data — local AND in the cloud. Are you sure?')) return;
+    if (!confirm('Really erase everything? This cannot be undone.')) return;
+    const fresh = initialState();
+    localStorage.removeItem(STORAGE_KEY);
+    setStateRaw(fresh);
+    saveStateLocal(fresh);
+    if (cloudReady() && user) {
+      const payload = JSON.stringify(fresh);
+      fbDB().doc(FIRESTORE_DOC_PATH).set({
+        payload,
+        updatedAt: fbNS().firestore.FieldValue.serverTimestamp(),
+        updatedBy: (user && user.email) || 'unknown',
+        version: 1,
+      }).then(() => { lastWrittenPayloadRef.current = payload; }).catch(console.error);
+    }
+    toast('All data erased');
+  };
+
+  const restoreFromSnapshot = (snapState) => {
+    setState(snapState);
+  };
+
+  const handleAutoDownloadToggle = (e) => {
+    const on = e.target.checked;
+    setAutoDownload(on);
+    localStorage.setItem(AUTO_DL_PREF_KEY, on ? '1' : '0');
+    if (on) toast('Daily auto-download enabled — first download tomorrow');
+  };
+
+  const handleSignOut = async () => {
+    if (!confirm('Sign out of Bike Care on this device?')) return;
+    try {
+      await fbAuth().signOut();
+      // localStorage stays so re-sign-in is instant
+      setShowSettings(false);
+      toast('Signed out');
+    } catch (e) { toast('Sign out failed'); }
+  };
+
+  // ── Top stats for the chrome ─────────────────────────────────────────────
+  const cashBal = useMemo(() => {
+    let s = 0;
+    state.ledgers.filter(l => l.groupId === 'g_cash').forEach(l => {
+      const b = ledgerBalance(state, l.id);
+      s += b.side === 'dr' ? b.amount : -b.amount;
+    });
+    return s;
+  }, [state]);
+
+  const todaySales = useMemo(() => {
+    const t = todayISO();
+    return state.vouchers.filter(v => v.type === 'sales' && v.date === t).reduce((s, v) => s + (v.grand || 0), 0);
+  }, [state.vouchers]);
+
+  // ── Render: auth gate ────────────────────────────────────────────────────
+  if (authPhase === 'loading') {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="seal text-base mx-auto mb-4">BC</div>
+          <div className="display text-xl text-wax italic">Bike Care</div>
+          <div className="smcap text-mute mt-1">Connecting to cloud…</div>
+        </div>
+      </div>
+    );
+  }
+  if (authPhase === 'login') {
+    return <LoginScreen />;
+  }
+  // 'ready' or 'local-fallback' — render the app
+
+  // ── Render: main app ─────────────────────────────────────────────────────
+  return (
+    <div className="min-h-screen flex flex-col">
+      {/* Top Chrome */}
+      <header className="bg-paper border-b border-rule2 px-6 py-3 flex items-center justify-between no-print">
+        <div className="flex items-center gap-4">
+          <div className="seal text-sm">BC</div>
+          <div>
+            <h1 className="display text-xl leading-none">{state.meta.businessName}</h1>
+            <div className="text-xs text-mute italic mt-0.5">Since {state.meta.since} · {fmtDate(todayISO())}</div>
+          </div>
+        </div>
+        <div className="flex items-center gap-6">
+          <div className="text-right">
+            <div className="smcap text-mute text-[10px]">Today's Sales</div>
+            <div className="num text-sm font-semibold">₹ {inr(todaySales)}</div>
+          </div>
+          <div className="text-right">
+            <div className="smcap text-mute text-[10px]">Cash on Hand</div>
+            <div className="num text-sm font-semibold">₹ {inr(cashBal)}</div>
+          </div>
+          <button onClick={() => setShowSettings(true)} className="btn btn-ghost text-xs">Data ⚙</button>
+        </div>
+      </header>
+
+      {/* Main */}
+      <div className="flex flex-1 min-h-0">
+        <main className="flex-1 px-8 py-6 overflow-auto">
+          {screen === 'PURCHASES' && <PurchasesScreen state={state} setState={setState} toast={toast} />}
+          {screen === 'SALES'     && <SalesScreen     state={state} setState={setState} toast={toast} gotoReceipt={gotoReceipt} />}
+          {screen === 'PAYMENT'   && <PaymentReceiptScreen state={state} setState={setState} toast={toast} mode="PAYMENT" />}
+          {screen === 'RECEIPT'   && <PaymentReceiptScreen state={state} setState={setState} toast={toast} mode="RECEIPT" prefill={receiptPrefill} />}
+          {screen === 'JOURNAL'   && <JournalScreen   state={state} setState={setState} toast={toast} />}
+          {screen === 'REPORTS'   && <ReportsScreen   state={state} />}
+          {screen === 'MASTERS'   && <MastersScreen   state={state} setState={setState} toast={toast} />}
+        </main>
+
+        <HotKeysSidebar active={screen} onSwitch={switchScreen} />
+      </div>
+
+      {/* Footer */}
+      <footer className="border-t border-rule2 bg-paper2/30 px-6 py-2 flex justify-between items-center text-xs text-mute no-print">
+        <div className="flex items-center gap-3">
+          <span className="key">F1</span><span>Purchases</span>
+          <span className="key">F2</span><span>Sales</span>
+          <span className="key">F3</span><span>Payment</span>
+          <span className="key">F4</span><span>Receipt</span>
+          <span className="key">F5</span><span>Journal</span>
+          <span className="key">F6</span><span>Reports</span>
+          <span className="key">F7</span><span>Masters</span>
+        </div>
+        <div className="flex items-center gap-3">
+          <span>{state.vouchers.length} vouchers · {state.ledgers.length} ledgers · {state.items.length} items</span>
+          <span className="text-rule2">·</span>
+          <SyncStatusPill status={syncStatus} lastSyncAt={lastSyncAt} />
+          <span className="text-rule2">·</span>
+          <span className="italic text-[10px]">v1.0</span>
+        </div>
+      </footer>
+
+      {/* Settings */}
+      <Modal open={showSettings} onClose={() => setShowSettings(false)} title="Data & Settings"
+             footer={<button onClick={() => setShowSettings(false)} className="btn btn-ghost">Done</button>}>
+        <div className="space-y-5">
+          {/* Account */}
+          {cloudReady() && user && (
+            <div>
+              <div className="smcap text-mute mb-2">Account</div>
+              <div className="flex items-center justify-between text-sm">
+                <div>
+                  <div className="font-medium">{user.email}</div>
+                  <div className="text-xs text-mute italic">Signed in · session persists on this device</div>
+                </div>
+                <button onClick={handleSignOut} className="btn btn-ghost text-xs">Sign Out</button>
+              </div>
+            </div>
+          )}
+          {!cloudReady() && (
+            <div className="bg-paper2/50 border border-rule2 rounded p-3 text-xs text-mute">
+              <div className="font-semibold text-ink mb-1">⚠ Cloud sync unavailable</div>
+              Firebase didn't load — likely a network or CDN issue. The app is running on local storage only. Reload when you're back online.
+            </div>
+          )}
+
+          <div className="border-t border-rule pt-4">
+            <div className="smcap text-mute mb-2">Business</div>
+            <div className="space-y-3">
+              <div>
+                <label className="smcap text-mute block mb-1">Business Name</label>
+                <input className="w-full" value={state.meta.businessName} onChange={(e) => setState({ ...state, meta: { ...state.meta, businessName: e.target.value } })} />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="smcap text-mute block mb-1">Since</label>
+                  <input className="w-full" value={state.meta.since} onChange={(e) => setState({ ...state, meta: { ...state.meta, since: e.target.value } })} />
+                </div>
+                <div>
+                  <label className="smcap text-mute block mb-1">FY Start</label>
+                  <input type="date" className="w-full" value={state.meta.fyStart} onChange={(e) => setState({ ...state, meta: { ...state.meta, fyStart: e.target.value } })} />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="border-t border-rule pt-4">
+            <div className="smcap text-mute mb-2">Backup & Restore</div>
+            <div className="flex gap-2 flex-wrap">
+              <button onClick={() => setShowBackups(true)} className="btn btn-ghost">📚 Daily Snapshots ({loadSnapshots().length})</button>
+              <button onClick={exportData} className="btn btn-ghost">⬇ Export JSON</button>
+              <label className="btn btn-ghost cursor-pointer">
+                ⬆ Import JSON
+                <input type="file" accept=".json" className="hidden" onChange={(e) => e.target.files[0] && importData(e.target.files[0])} />
+              </label>
+              <button onClick={wipeAll} className="btn btn-danger">Erase All Data</button>
+            </div>
+            <label className="flex items-start gap-2 mt-4 cursor-pointer text-xs">
+              <input type="checkbox" checked={autoDownload} onChange={handleAutoDownloadToggle}
+                     style={{ width: 'auto', marginTop: 2 }} />
+              <span>
+                <span className="font-medium not-italic">Auto-download a JSON backup once per day</span>
+                <span className="block text-mute italic mt-0.5">
+                  On first app open each day, the browser silently saves a dated JSON to your Downloads folder. Filesystem failsafe in case both cloud and browser cache fail.
+                </span>
+              </span>
+            </label>
+            <p className="text-xs text-mute italic mt-3 leading-relaxed">
+              {cloudReady()
+                ? 'Data syncs to Firebase across all your devices. localStorage on each device acts as an instant cache and works offline. Daily snapshots give you a 30-day in-app history.'
+                : 'Data lives in your browser\'s local storage only. Cloud sync is unavailable right now.'}
+            </p>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Backups (Daily Snapshots) */}
+      <BackupsModal
+        open={showBackups}
+        onClose={() => setShowBackups(false)}
+        onView={(snap, date) => { setShowBackups(false); setViewingSnap({ snap, date }); }}
+        onRestore={restoreFromSnapshot}
+        toast={toast}
+      />
+
+      {/* Read-only snapshot viewer */}
+      {viewingSnap && (
+        <SnapshotViewer
+          snapshot={viewingSnap.snap}
+          snapshotDate={viewingSnap.date}
+          onClose={() => setViewingSnap(null)}
+        />
+      )}
+
+      <Toast msg={toastMsg} onDone={() => setToastMsg('')} />
+    </div>
+  );
+}
+
+try {
+  ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+} catch (err) {
+  document.getElementById('root').innerHTML =
+    '<div style="padding:32px;font-family:system-ui;color:#1b1c22;max-width:640px;margin:40px auto;background:#f5efe1;border:1px solid #c2b791;border-radius:4px"><h2 style="font-family:Fraunces,serif;margin:0 0 12px;color:#7a1f2b">App failed to load</h2><p>One of the script CDNs may be blocked. Try a different network or browser. Error: <code>' + (err && err.message ? err.message : err) + '</code></p></div>';
+  console.error('Bike Care ERP failed to mount:', err);
+}
+</script>
+</body>
+</html>
