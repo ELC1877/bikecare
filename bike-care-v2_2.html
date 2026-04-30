@@ -1,0 +1,3325 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+<title>Bike Care V2.2 — Sales · Inventory · Books</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Inter+Tight:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<script src="https://cdn.tailwindcss.com"></script>
+<script crossorigin src="https://unpkg.com/react@18.3.1/umd/react.production.min.js"></script>
+<script crossorigin src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js"></script>
+<script crossorigin src="https://unpkg.com/prop-types@15.8.1/prop-types.min.js"></script>
+<script crossorigin src="https://unpkg.com/recharts@2.12.7/umd/Recharts.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore-compat.js"></script>
+<!-- Excel export (SheetJS) and PDF export (jsPDF + autotable) -->
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+<script>
+  // ── FIREBASE CONFIG — Bike Care V2.2 ───────────────────────────────
+  // Public Web API keys — security comes from Firestore Rules + Auth.
+  const firebaseConfig = {
+    apiKey: "AIzaSyBqvOLt3V15IM4YRoQxqpAFfa3E5ppTId4",
+    authDomain: "bikecareerp.firebaseapp.com",
+    projectId: "bikecareerp",
+    storageBucket: "bikecareerp.firebasestorage.app",
+    messagingSenderId: "447873429981",
+    appId: "1:447873429981:web:9c1e832136c6122fadc634",
+    measurementId: "G-P6V5SFPBLF"
+  };
+  try {
+    if (typeof firebase !== 'undefined') {
+      firebase.initializeApp(firebaseConfig);
+      // Auth session survives browser close (default LOCAL persistence is fine).
+      firebase.auth().setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(() => {});
+      window.__BC_AUTH = firebase.auth();
+      window.__BC_DB   = firebase.firestore();
+      window.__BC_FS   = firebase;
+      // Offline persistence — Firestore caches everything locally; works offline.
+      window.__BC_DB.enablePersistence({ synchronizeTabs: true }).catch(err => {
+        console.warn('Firestore offline persistence:', err && err.code);
+      });
+    } else {
+      console.error('Firebase SDK failed to load — app will run in local-only fallback.');
+    }
+  } catch (e) {
+    console.error('Firebase init failed:', e);
+  }
+</script>
+<script src="https://unpkg.com/@babel/standalone@7.24.7/babel.min.js"></script>
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        colors: {
+          // Paper / ledger surfaces (kept — ledger book aesthetic)
+          paper:  '#f5efe1',
+          paper2: '#ede5d2',
+          rule:   '#d9cfb6',
+          rule2:  '#c2b791',
+          ink:    '#1b1c22',
+          ink2:   '#3d3a36',
+          mute:   '#7a7464',
+
+          // Brand — pulled from the Bike Care logo
+          // 'wax' kept as a token name for backward-compat with existing classes,
+          // but its value is now the logo's teal — primary action color.
+          wax:    '#1b6e84',   // logo teal (primary)
+          wax2:   '#155770',   // teal hover/darker
+          gold:   '#c8252c',   // logo red (warnings / accents)
+          gold2:  '#a01e23',
+          ok:     '#2e8b2e',   // logo green (success / inflow)
+          steel:  '#1e3a8a',   // tiny dark-blue accent from logo
+        },
+        fontFamily: {
+          serif: ['Fraunces', 'ui-serif', 'Georgia', 'serif'],
+          sans:  ['Inter Tight', 'ui-sans-serif', 'system-ui'],
+          mono:  ['JetBrains Mono', 'ui-monospace', 'Menlo', 'monospace'],
+        },
+      },
+    },
+  };
+</script>
+<style>
+  html, body { background: #f5efe1; color: #1b1c22; font-family: 'Inter Tight', system-ui, sans-serif; }
+  body { background-image:
+      repeating-linear-gradient(0deg, transparent 0 26px, rgba(192,179,140,0.18) 26px 27px),
+      radial-gradient(ellipse at top left, rgba(27,110,132,0.05), transparent 60%),
+      radial-gradient(ellipse at bottom right, rgba(200,37,44,0.04), transparent 55%);
+    background-attachment: fixed;
+  }
+  .num { font-variant-numeric: tabular-nums; font-family: 'JetBrains Mono', monospace; }
+  .display { font-family: 'Fraunces', serif; font-optical-sizing: auto; letter-spacing: -0.01em; }
+  .smcap { font-family: 'Inter Tight', sans-serif; text-transform: uppercase; letter-spacing: 0.14em; font-size: 11px; font-weight: 600; }
+  .rule { background-image: linear-gradient(to right, transparent, #c2b791 20%, #c2b791 80%, transparent); height: 1px; }
+  /* Brand rule — teal accent stripe under top header */
+  .brand-rule { height: 3px;
+    background-image: linear-gradient(to right, #1b6e84 0%, #1b6e84 35%, #2e8b2e 50%, #c8252c 65%, #c8252c 100%);
+    opacity: 0.85;
+  }
+  /* Visible focus for keyboard users — now teal */
+  input:focus, select:focus, textarea:focus, button:focus { outline: 2px solid #1b6e84; outline-offset: 1px; }
+  input, select, textarea {
+    background: rgba(255,253,247,0.6);
+    border: 1px solid #c2b791;
+    border-radius: 2px;
+    padding: 6px 8px;
+    color: #1b1c22;
+    font-family: inherit;
+  }
+  input.num, .num input { font-family: 'JetBrains Mono', monospace; text-align: right; }
+  input[type=date] { font-family: 'JetBrains Mono', monospace; }
+  table.ledger { border-collapse: collapse; width: 100%; }
+  table.ledger th, table.ledger td { border-bottom: 1px solid #d9cfb6; padding: 8px 10px; text-align: left; }
+  table.ledger th { background: rgba(217,207,182,0.45); font-weight: 600; font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: #3d3a36; }
+  table.ledger tr:hover td { background: rgba(255,253,247,0.5); }
+  .key { font-family: 'JetBrains Mono', monospace; font-size: 10px; padding: 2px 5px; background: #1b1c22; color: #f5efe1; border-radius: 2px; letter-spacing: 0.06em; }
+  .keypaper { font-family: 'JetBrains Mono', monospace; font-size: 10px; padding: 2px 5px; background: #f5efe1; color: #1b1c22; border: 1px solid #1b1c22; border-radius: 2px; letter-spacing: 0.06em; }
+  .btn { padding: 6px 14px; font-size: 12px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; border-radius: 2px; border: 1px solid transparent; cursor: pointer; transition: all 0.15s ease; }
+  .btn-primary { background: #1b6e84; color: #f5efe1; border-color: #1b6e84; }
+  .btn-primary:hover { background: #155770; }
+  .btn-ghost { background: transparent; color: #1b1c22; border-color: #c2b791; }
+  .btn-ghost:hover { background: rgba(217,207,182,0.5); }
+  .btn-danger { background: transparent; color: #c8252c; border-color: #c8252c; }
+  .btn-danger:hover { background: #c8252c; color: #f5efe1; }
+  .btn-warn { background: #c8252c; color: #f5efe1; border-color: #c8252c; }
+  .btn-warn:hover { background: #a01e23; }
+  .chip { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; background: rgba(217,207,182,0.6); border-radius: 999px; font-size: 11px; }
+  .chip-warn { background: rgba(200,37,44,0.12); color: #a01e23; border: 1px solid rgba(200,37,44,0.3); }
+  /* Wax seal effect — recoloured as a workshop service-stamp in teal */
+  .seal {
+    width: 56px; height: 56px; border-radius: 50%;
+    background: radial-gradient(circle at 35% 30%, #2891a8, #1b6e84 60%, #0f4a59);
+    display: flex; align-items: center; justify-content: center;
+    color: #f5efe1; font-family: 'Fraunces', serif; font-weight: 600; font-style: italic;
+    box-shadow: 0 4px 8px rgba(15,74,89,0.3), inset 0 -2px 4px rgba(0,0,0,0.3);
+    transform: rotate(-7deg);
+  }
+  /* Header logo wrapper — keeps logo crisp and well-aligned */
+  .brand-logo { height: 52px; width: auto; display: block;
+    filter: drop-shadow(0 1px 1px rgba(0,0,0,0.05)); }
+  .brand-logo-lg { height: 80px; width: auto; display: block; margin: 0 auto; }
+  /* Suggestions dropdown */
+  .suggest { position: absolute; z-index: 50; background: #fffdf7; border: 1px solid #c2b791; border-radius: 2px; box-shadow: 0 8px 24px rgba(0,0,0,0.08); max-height: 280px; overflow-y: auto; min-width: 100%; }
+  .suggest-item { padding: 6px 10px; font-size: 13px; cursor: pointer; border-bottom: 1px solid #ede5d2; }
+  .suggest-item:hover, .suggest-item.active { background: #f5efe1; }
+  .suggest-item .meta { color: #7a7464; font-size: 11px; }
+  /* Modal */
+  .modal-bg { position: fixed; inset: 0; background: rgba(27,28,34,0.4); z-index: 100; display: flex; align-items: center; justify-content: center; padding: 24px; }
+  .modal-card { background: #f5efe1; border: 1px solid #c2b791; border-radius: 4px; max-width: 700px; width: 100%; max-height: 90vh; overflow-y: auto; box-shadow: 0 24px 48px rgba(0,0,0,0.2); }
+  /* Print */
+  @media print {
+    body { background: white; }
+    .no-print { display: none !important; }
+  }
+  /* Subtle scrollbar */
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #c2b791; border-radius: 4px; }
+  ::-webkit-scrollbar-thumb:hover { background: #a89c75; }
+</style>
+</head>
+<body>
+<div id="root">
+  <div style="padding:48px 24px;font-family:'Inter Tight',system-ui,sans-serif;color:#7a7464;text-align:center">
+    <div style="font-family:'Fraunces',serif;font-size:28px;color:#1b6e84;font-style:italic;margin-bottom:8px">Bike Care <span style="font-size:14px;font-style:normal;letter-spacing:0.06em">V2.2</span></div>
+    <div style="font-size:13px;letter-spacing:0.14em;text-transform:uppercase">Loading the books…</div>
+  </div>
+</div>
+<script type="text/babel">
+'use strict';
+
+const { useState, useEffect, useMemo, useRef, useCallback } = React;
+const _R = (typeof Recharts !== 'undefined' && Recharts) ? Recharts : {};
+const { LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } = _R;
+const ChartsAvailable = !!_R.LineChart;
+
+// ──────────────────────────────────────────────────────────────────────────
+// CONSTANTS
+// ──────────────────────────────────────────────────────────────────────────
+
+const STORAGE_KEY = 'bikecare_erp_v1';
+
+// ── BUSINESS IDENTITY (code-permanent) ─────────────────────────────────────
+// To rename a deployment for another business (e.g. Narayandas Sweets, Gupta
+// Travels, Factory) edit BUSINESS_NAME here in the source. It is intentionally
+// not editable from inside the app.
+const BUSINESS_NAME = 'Bike Care';
+
+// ── BRAND LOGO ─────────────────────────────────────────────────────────────
+// Bike Care logo, embedded so the app stays a single self-contained file.
+// To change the logo for another deployment, replace this base64 string
+// (PNG/JPEG/WebP all work — keep the data: prefix matching the format).
+const BRAND_LOGO_DATA_URL = 'data:image/webp;base64,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';
+
+// 19 predefined ledger groups, each tagged with its accounting nature
+// nature: 'asset' | 'liability' | 'income' | 'expense'
+const DEFAULT_GROUPS = [
+  { id: 'g_bank',          name: 'Bank Accounts',       nature: 'asset',     order: 1  },
+  { id: 'g_bank_od',       name: 'Bank O/D Accounts',   nature: 'liability', order: 2  },
+  { id: 'g_capital',       name: 'Capital A/c',         nature: 'liability', order: 3  },
+  { id: 'g_cash',          name: 'Cash in Hand',        nature: 'asset',     order: 4  },
+  { id: 'g_curr_assets',   name: 'Current Assets',      nature: 'asset',     order: 5  },
+  { id: 'g_curr_liab',     name: 'Current Liabilities', nature: 'liability', order: 6  },
+  { id: 'g_direct_exp',    name: 'Direct Expenses',     nature: 'expense',   order: 7  },
+  { id: 'g_direct_inc',    name: 'Direct Incomes',      nature: 'income',    order: 8  },
+  { id: 'g_duties',        name: 'Duties & Taxes',      nature: 'liability', order: 9  },
+  { id: 'g_fixed_assets',  name: 'Fixed Assets',        nature: 'asset',     order: 10 },
+  { id: 'g_indirect_exp',  name: 'Indirect Expenses',   nature: 'expense',   order: 11 },
+  { id: 'g_indirect_inc',  name: 'Indirect Income',     nature: 'income',    order: 12 },
+  { id: 'g_provisions',    name: 'Provisions',          nature: 'liability', order: 13 },
+  { id: 'g_reserves',      name: 'Reserve & Surplus',   nature: 'liability', order: 14 },
+  { id: 'g_purchase',      name: 'Purchase Accounts',   nature: 'expense',   order: 15 },
+  { id: 'g_sales',         name: 'Sales Accounts',      nature: 'income',    order: 16 },
+  { id: 'g_sundry_cr',     name: 'Sundry Creditors',    nature: 'liability', order: 17 },
+  { id: 'g_sundry_dr',     name: 'Sundry Debtors',      nature: 'asset',     order: 18 },
+  { id: 'g_suspense',      name: 'Suspense Account',    nature: 'liability', order: 19 },
+];
+
+const DEFAULT_LEDGERS = [
+  { id: 'l_cash',     name: 'Cash',             groupId: 'g_cash',    openingBalance: 0, locked: true },
+  { id: 'l_sales',    name: 'Sales',            groupId: 'g_sales',   openingBalance: 0, locked: true },
+  { id: 'l_purchase', name: 'Purchase',         groupId: 'g_purchase', openingBalance: 0, locked: true },
+  { id: 'l_pl',       name: 'Profit & Loss A/c', groupId: 'g_capital', openingBalance: 0, locked: true },
+];
+
+const DEFAULT_UNITS = [
+  { id: 'u_pcs', name: 'Pcs' },
+  { id: 'u_kg',  name: 'Kg'  },
+  { id: 'u_g',   name: 'Gram' },
+  { id: 'u_box', name: 'Box' },
+  { id: 'u_pkt', name: 'Packet' },
+];
+
+const SCREENS = {
+  PURCHASES: { key: 'PURCHASES', label: 'Purchases', hot: 'F1' },
+  SALES:     { key: 'SALES',     label: 'Sales',     hot: 'F2' },
+  PAYMENT:   { key: 'PAYMENT',   label: 'Payment',   hot: 'F3' },
+  RECEIPT:   { key: 'RECEIPT',   label: 'Receipt',   hot: 'F4' },
+  JOURNAL:   { key: 'JOURNAL',   label: 'Journal',   hot: 'F5' },
+  REPORTS:   { key: 'REPORTS',   label: 'Reports',   hot: 'F6' },
+  MASTERS:   { key: 'MASTERS',   label: 'Masters',   hot: 'F7' },
+};
+const SCREEN_LIST = ['PURCHASES','SALES','PAYMENT','RECEIPT','JOURNAL','REPORTS','MASTERS'];
+
+// Which ledger groups are valid as the "other party" of a transaction.
+// Purchase: vendor side (whoever we owe / paid). Sales: customer side (whoever owes / paid us).
+const VENDOR_GROUPS   = ['g_sundry_cr', 'g_cash', 'g_bank', 'g_bank_od'];
+const CUSTOMER_GROUPS = ['g_sundry_dr', 'g_cash', 'g_bank'];
+
+// Date helpers — anchored to IST (Asia/Kolkata) so a 1 AM voucher in India
+// stays on the calendar day the user expects, never UTC-shifted to "yesterday".
+const todayISO = () => {
+  // 'en-CA' returns YYYY-MM-DD which matches our internal ISO format.
+  return new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+};
+const fmtDate = (iso) => {
+  if (!iso) return '';
+  const [y,m,d] = iso.split('-');
+  return `${d}/${m}/${y}`;
+};
+const fmtDateLong = (iso) => {
+  if (!iso) return '';
+  const [y,m,d] = iso.split('-');
+  const dt = new Date(Date.UTC(Number(y), Number(m)-1, Number(d)));
+  // Render as e.g. "Wednesday, 29 April 2026" in IST
+  return dt.toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' });
+};
+const inr = (n) => {
+  const num = Number(n) || 0;
+  const sign = num < 0 ? '-' : '';
+  const abs = Math.abs(num);
+  // Indian numbering with 2dp
+  const s = abs.toFixed(2);
+  const [intP, decP] = s.split('.');
+  const last3 = intP.slice(-3);
+  const rest = intP.slice(0, -3);
+  const restF = rest.replace(/\B(?=(\d{2})+(?!\d))/g, ',');
+  return sign + (rest ? restF + ',' + last3 : last3) + '.' + decP;
+};
+const uid = (prefix) => `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2,8)}`;
+
+// ──────────────────────────────────────────────────────────────────────────
+// STORAGE — Layered: Firestore (primary, cross-device)
+//                  ↔ localStorage (instant cache + offline)
+//                  + daily snapshots (history viewer)
+//                  + optional auto-download (filesystem failsafe)
+// ──────────────────────────────────────────────────────────────────────────
+
+const SNAPSHOT_KEY      = 'bikecare_erp_v1_snaps';
+const LAST_DOWNLOAD_KEY = 'bikecare_erp_v1_lastDl';
+const AUTO_DL_PREF_KEY  = 'bikecare_erp_v1_autoDl';
+const SNAPSHOT_LIMIT    = 30; // keep 30 most recent days, plus pinned
+
+const initialState = () => ({
+  meta: {
+    businessName: BUSINESS_NAME,        // sourced from the code-permanent constant
+    fyStart: `${new Date().getFullYear()}-04-01`,
+  },
+  groups: DEFAULT_GROUPS,
+  ledgers: DEFAULT_LEDGERS,
+  units: DEFAULT_UNITS,
+  superCategories: [],
+  subCategories: [],
+  items: [],
+  vouchers: [],
+  ledgerEntries: [],
+  stockEntries: [],
+  counters: { sales: 1, purchase: 1, payment: 1, receipt: 1, journal: 1 },
+});
+
+const normalizeState = (parsed) => {
+  const base = initialState();
+  const merged = {
+    ...base,
+    ...(parsed || {}),
+    groups: parsed && parsed.groups && parsed.groups.length === 19 ? parsed.groups : DEFAULT_GROUPS,
+  };
+  // Force businessName to the code constant — it is intentionally not editable
+  // from the UI. To rename for another business, edit BUSINESS_NAME in source.
+  merged.meta = { ...(parsed?.meta || {}), ...base.meta, businessName: BUSINESS_NAME };
+  // Drop the legacy 'since' field if present in old saved data
+  if (merged.meta.since) delete merged.meta.since;
+  return merged;
+};
+
+// — localStorage mirror (Tier 2: instant first paint + offline) —
+const loadStateLocal = () => {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return initialState();
+    return normalizeState(JSON.parse(raw));
+  } catch (e) {
+    console.error('Local load failed', e);
+    return initialState();
+  }
+};
+const saveStateLocal = (s) => {
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(s)); } catch (e) { console.error(e); }
+};
+
+// — daily snapshots ring buffer (Tier 3: in-app history) —
+const loadSnapshots = () => {
+  try {
+    const raw = localStorage.getItem(SNAPSHOT_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch (e) { return []; }
+};
+const saveSnapshots = (arr) => {
+  try { localStorage.setItem(SNAPSHOT_KEY, JSON.stringify(arr)); } catch (e) { console.error(e); }
+};
+const captureSnapshotIfNeeded = (s) => {
+  try {
+    const today = todayISO();
+    const snaps = loadSnapshots();
+    const idx = snaps.findIndex(x => x.date === today);
+    const sales = (s.vouchers || []).filter(v => v.type === 'sales');
+    const meta = {
+      date: today,
+      voucherCount: (s.vouchers || []).length,
+      salesCount: sales.length,
+      totalSales: sales.reduce((sum, v) => sum + (Number(v.grand) || 0), 0),
+      capturedAt: Date.now(),
+      pinned: idx >= 0 ? !!snaps[idx].pinned : false,
+      payload: JSON.stringify(s),
+    };
+    if (idx >= 0) snaps[idx] = meta; else snaps.push(meta);
+    // Keep most recent SNAPSHOT_LIMIT, plus any pinned, plus today's
+    const sorted = snaps.sort((a, b) => b.date.localeCompare(a.date));
+    const trimmed = sorted.filter((x, i) => x.pinned || x.date === today || i < SNAPSHOT_LIMIT);
+    saveSnapshots(trimmed);
+  } catch (e) { console.error('Snapshot capture failed', e); }
+};
+const pinSnapshot = (date, pin) => {
+  const snaps = loadSnapshots();
+  const idx = snaps.findIndex(x => x.date === date);
+  if (idx >= 0) { snaps[idx].pinned = !!pin; saveSnapshots(snaps); }
+};
+const deleteSnapshot = (date) => {
+  saveSnapshots(loadSnapshots().filter(x => x.date !== date));
+};
+
+// — daily auto-download (Tier 4: optional filesystem failsafe) —
+const triggerDailyAutoDownload = (s) => {
+  try {
+    if (localStorage.getItem(AUTO_DL_PREF_KEY) !== '1') return;
+    const today = todayISO();
+    if (localStorage.getItem(LAST_DOWNLOAD_KEY) === today) return;
+    const blob = new Blob([JSON.stringify(s, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `bikecare-erp-${today}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    localStorage.setItem(LAST_DOWNLOAD_KEY, today);
+  } catch (e) { console.error('Auto-download failed', e); }
+};
+
+// — Firestore (Tier 1: primary, cross-device, real-time) —
+const FIRESTORE_DOC_PATH = 'app/state'; // single doc; easy to migrate to per-collection later
+
+const fbAuth = () => (typeof window !== 'undefined' ? window.__BC_AUTH : null);
+const fbDB   = () => (typeof window !== 'undefined' ? window.__BC_DB   : null);
+const fbNS   = () => (typeof window !== 'undefined' ? window.__BC_FS   : null);
+const cloudReady = () => !!(fbAuth() && fbDB() && fbNS());
+
+// ──────────────────────────────────────────────────────────────────────────
+// ACCOUNTING HELPERS
+// ──────────────────────────────────────────────────────────────────────────
+
+// Compute balance for a single ledger as of optional date (inclusive)
+// Returns positive number with separate 'side' indicating Dr or Cr balance
+function ledgerBalance(state, ledgerId, asOfDate) {
+  const ledger = state.ledgers.find(l => l.id === ledgerId);
+  if (!ledger) return { amount: 0, side: 'dr' };
+  const group = state.groups.find(g => g.id === ledger.groupId);
+  const naturalDr = group && (group.nature === 'asset' || group.nature === 'expense');
+  let dr = 0, cr = 0;
+  // Opening balance: assets/expenses are normally debit; liabilities/income normally credit
+  if (ledger.openingBalance) {
+    if (naturalDr) dr += Number(ledger.openingBalance) || 0;
+    else cr += Number(ledger.openingBalance) || 0;
+  }
+  state.ledgerEntries.forEach(e => {
+    if (e.ledgerId !== ledgerId) return;
+    if (asOfDate && e.date > asOfDate) return;
+    dr += Number(e.dr) || 0;
+    cr += Number(e.cr) || 0;
+  });
+  const net = dr - cr;
+  return { amount: Math.abs(net), side: net >= 0 ? 'dr' : 'cr', dr, cr };
+}
+
+// Stock balance for an item
+function stockBalance(state, itemId, asOfDate) {
+  const item = state.items.find(i => i.id === itemId);
+  if (!item) return 0;
+  let bal = Number(item.openingBalance) || 0;
+  state.stockEntries.forEach(e => {
+    if (e.itemId !== itemId) return;
+    if (asOfDate && e.date > asOfDate) return;
+    bal += (Number(e.in) || 0) - (Number(e.out) || 0);
+  });
+  return bal;
+}
+
+// Find or create a customer/vendor ledger by name
+function findOrCreateParty(state, name, groupId) {
+  const trimmed = (name || '').trim();
+  if (!trimmed) return null;
+  const existing = state.ledgers.find(l => l.name.toLowerCase() === trimmed.toLowerCase());
+  if (existing) return existing;
+  const newL = { id: uid('l'), name: trimmed, groupId, openingBalance: 0, contact: '', address: '', vehicle: '' };
+  state.ledgers.push(newL);
+  return newL;
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// COMMON COMPONENTS
+// ──────────────────────────────────────────────────────────────────────────
+
+function PaperCard({ children, className = '' }) {
+  return (
+    <div className={`bg-paper rounded-sm border border-rule shadow-sm ${className}`}
+         style={{ boxShadow: '0 1px 0 rgba(255,253,247,0.6) inset, 0 2px 8px rgba(60,40,20,0.06)' }}>
+      {children}
+    </div>
+  );
+}
+
+function ScreenHeader({ title, voucherNo, voucherDate, onDateChange, right }) {
+  return (
+    <div className="border-b border-rule2 pb-3 mb-4 flex items-end justify-between gap-4">
+      <div>
+        <div className="smcap text-mute">{voucherNo ? 'Voucher' : ''}</div>
+        <h2 className="display text-3xl font-medium text-ink leading-none">{title}</h2>
+      </div>
+      <div className="flex items-center gap-4">
+        {voucherDate !== undefined && (
+          <label className="text-sm flex items-center gap-2">
+            <span className="smcap text-mute">Date</span>
+            <input type="date" value={voucherDate} onChange={(e) => onDateChange(e.target.value)} className="text-sm" />
+          </label>
+        )}
+        {voucherNo !== undefined && (
+          <div className="text-right">
+            <div className="smcap text-mute">No.</div>
+            <div className="num text-lg font-semibold">{voucherNo}</div>
+          </div>
+        )}
+        {right}
+      </div>
+    </div>
+  );
+}
+
+// Autocomplete picker — supports keyboard nav, fast filter, "create new" inline.
+//
+// V2.2 FIX — "Pick an item from the dropdown" race:
+// Earlier versions only auto-picked exact-match typed text on blur / Enter / Tab.
+// In React 18 those state updates are batched, so when the user typed an item
+// name and clicked Save Voucher, the order was:
+//   1. blur fires → tryAutoPickExact → setLines QUEUED (not flushed)
+//   2. click fires → save() runs synchronously with STALE lines (itemId = '')
+//   3. validation fails → toast "Pick an item from the dropdown — typing alone is not enough"
+//   4. React finally flushes the queued setLines, but the toast already fired.
+// Three previous patches all stayed on the wrong side of this race because they
+// hooked into blur / keydown — every one of which loses to the click handler.
+// The real fix is to push the autopick UP into the keystroke handler, so by the
+// time the user releases the last key the parent's lines[i].itemId is already set
+// and there is nothing left to flush when click arrives.
+function Picker({ value, onChange, onTextChange, options, placeholder = '', getLabel = (o) => o.name, getMeta, allowCreate = false, onCreate, autoFocus, className = '' }) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState(value ? getLabel(options.find(o => o.id === value) || { name: '' }) : '');
+  const [active, setActive] = useState(0);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    const o = options.find(o => o.id === value);
+    setQuery(o ? getLabel(o) : (value ? value : ''));
+  }, [value, options.length]);
+
+  const filtered = useMemo(() => {
+    const q = query.toLowerCase().trim();
+    if (!q) return options.slice(0, 50);
+    return options.filter(o => getLabel(o).toLowerCase().includes(q)).slice(0, 50);
+  }, [query, options]);
+
+  const pick = (opt) => {
+    onChange(opt.id, opt);
+    setQuery(getLabel(opt));
+    setOpen(false);
+  };
+  const createNew = () => {
+    if (!query.trim() || !onCreate) return;
+    const created = onCreate(query.trim());
+    if (created) {
+      onChange(created.id, created);
+      setQuery(getLabel(created));
+    }
+    setOpen(false);
+  };
+  // Auto-select when the typed query exactly matches an option (case-insensitive, trimmed).
+  // Fixes the case where a user types the full item name and tabs/clicks away without
+  // explicitly mousing-down on a suggestion row.  Safe — only fires on exact matches.
+  const tryAutoPickExact = () => {
+    const q = query.toLowerCase().trim();
+    if (!q) return false;
+    const exact = options.find(o => getLabel(o).toLowerCase().trim() === q);
+    if (exact && exact.id !== value) {
+      onChange(exact.id, exact);
+      setQuery(getLabel(exact));
+      return true;
+    }
+    return false;
+  };
+  const onKey = (e) => {
+    if (e.key === 'ArrowDown') { e.preventDefault(); setActive(a => Math.min(a + 1, filtered.length - (allowCreate ? 0 : 1))); setOpen(true); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); setActive(a => Math.max(a - 1, 0)); }
+    else if (e.key === 'Enter') {
+      e.preventDefault();
+      if (open && active < filtered.length) pick(filtered[active]);
+      else if (allowCreate && query.trim()) createNew();
+      else tryAutoPickExact();
+    } else if (e.key === 'Tab') {
+      // Tab moves focus to the next field — pick the highlighted suggestion if dropdown
+      // is open, else fall back to an exact-match auto-pick.  Don't preventDefault — let
+      // browser focus move naturally.
+      if (open && active >= 0 && active < filtered.length) {
+        pick(filtered[active]);
+      } else {
+        tryAutoPickExact();
+      }
+      setOpen(false);
+    } else if (e.key === 'Escape') {
+      setOpen(false);
+    }
+  };
+
+  // Keystroke-time handler. Does THREE things in one pass so the parent is
+  // always in sync with what's visible in the input:
+  //   (a) update local query
+  //   (b) if typed text exactly matches an option, push that selection to the
+  //       parent IMMEDIATELY (this is what kills the blur-vs-click race)
+  //   (c) if typed text doesn't match anything but the parent currently holds
+  //       a value, clear that value — for allowCreate pickers we still tell
+  //       the parent the typed text via onTextChange so customer/vendor names
+  //       survive into save()
+  const handleInput = (v) => {
+    setQuery(v);
+    setOpen(true);
+    setActive(0);
+    const trimmed = v.trim().toLowerCase();
+    const exact = trimmed ? options.find(o => getLabel(o).toLowerCase().trim() === trimmed) : null;
+    if (exact) {
+      if (exact.id !== value) onChange(exact.id, exact);
+    } else {
+      if (value) onChange('', null);
+      if (onTextChange) onTextChange(v);
+    }
+  };
+
+  return (
+    <div className={`relative ${className}`} ref={ref}>
+      <input
+        value={query}
+        autoFocus={autoFocus}
+        onChange={(e) => handleInput(e.target.value)}
+        onFocus={() => setOpen(true)}
+        onBlur={() => { tryAutoPickExact(); setTimeout(() => setOpen(false), 150); }}
+        onKeyDown={onKey}
+        placeholder={placeholder}
+        className="w-full"
+      />
+      {open && (
+        <div className="suggest">
+          {filtered.length === 0 && !allowCreate && (
+            <div className="suggest-item text-mute italic">No matches</div>
+          )}
+          {filtered.map((o, i) => (
+            <div key={o.id} className={`suggest-item ${i === active ? 'active' : ''}`}
+                 onMouseDown={() => pick(o)} onMouseEnter={() => setActive(i)}>
+              <div className="font-medium">{getLabel(o)}</div>
+              {getMeta && <div className="meta">{getMeta(o)}</div>}
+            </div>
+          ))}
+          {allowCreate && query.trim() && !filtered.find(o => getLabel(o).toLowerCase() === query.toLowerCase().trim()) && (
+            <div className={`suggest-item ${active === filtered.length ? 'active' : ''}`}
+                 onMouseDown={createNew}
+                 onMouseEnter={() => setActive(filtered.length)}>
+              <span className="text-wax font-medium">+ Create</span> "{query.trim()}"
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Modal({ open, onClose, title, children, footer }) {
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [open, onClose]);
+  if (!open) return null;
+  return (
+    <div className="modal-bg" onClick={onClose}>
+      <div className="modal-card" onClick={(e) => e.stopPropagation()}>
+        <div className="px-6 pt-5 pb-3 border-b border-rule flex items-start justify-between">
+          <h3 className="display text-2xl">{title}</h3>
+          <button onClick={onClose} className="text-mute hover:text-ink text-xl leading-none">×</button>
+        </div>
+        <div className="px-6 py-4">{children}</div>
+        {footer && <div className="px-6 py-4 border-t border-rule flex justify-end gap-2 bg-paper2/40">{footer}</div>}
+      </div>
+    </div>
+  );
+}
+
+function Toast({ msg, onDone }) {
+  useEffect(() => {
+    if (!msg) return;
+    const t = setTimeout(onDone, 2400);
+    return () => clearTimeout(t);
+  }, [msg]);
+  if (!msg) return null;
+  return (
+    <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[200] bg-ink text-paper px-5 py-3 rounded-sm shadow-lg text-sm font-medium animate-fadein">
+      {msg}
+    </div>
+  );
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// SALES SCREEN
+// ──────────────────────────────────────────────────────────────────────────
+
+function SalesScreen({ state, setState, toast, gotoReceipt }) {
+  const next = state.counters.sales;
+  const [date, setDate] = useState(todayISO());
+  const [customerId, setCustomerId] = useState('');
+  const [customerName, setCustomerName] = useState('');
+  const [address, setAddress] = useState('');
+  const [contact, setContact] = useState('');
+  const [vehicle, setVehicle] = useState('');
+  const [lines, setLines] = useState([{ id: uid('ln'), itemId: '', qty: '', rate: '' }]);
+  const [otherCharges, setOtherCharges] = useState([]); // [{ledgerId, amount}]
+  const [narration, setNarration] = useState('');
+  const [savedVoucher, setSavedVoucher] = useState(null);
+
+  // Customer picker: Sundry Debtors (credit customer) + Cash in Hand + Bank Accounts only.
+  const customers = useMemo(() =>
+    state.ledgers.filter(l => CUSTOMER_GROUPS.includes(l.groupId)),
+    [state.ledgers]);
+
+  // Other-charge picker: Direct Income (preferred), other income, duties — NOT Current Liabilities.
+  const otherChargeLedgers = useMemo(() => state.ledgers.filter(l => {
+    const g = state.groups.find(x => x.id === l.groupId);
+    return g && (g.nature === 'income' || g.id === 'g_duties');
+  }), [state.ledgers, state.groups]);
+
+  const total = useMemo(() => lines.reduce((s, l) => s + (Number(l.qty) || 0) * (Number(l.rate) || 0), 0), [lines]);
+  const charges = useMemo(() => otherCharges.reduce((s, c) => s + (Number(c.amount) || 0), 0), [otherCharges]);
+  const grand = total + charges;
+
+  // Functional setters — avoid stale-closure overwrites when several fields are edited rapidly.
+  const addLine = () => setLines(prev => [...prev, { id: uid('ln'), itemId: '', qty: '', rate: '' }]);
+  const updateLine = (id, patch) => setLines(prev => prev.map(l => l.id === id ? { ...l, ...patch } : l));
+  const removeLine = (id) => setLines(prev => prev.length > 1 ? prev.filter(l => l.id !== id) : prev);
+
+  const addCharge = () => setOtherCharges(prev => [...prev, { id: uid('ch'), ledgerId: '', amount: '' }]);
+  const updateCharge = (id, patch) => setOtherCharges(prev => prev.map(c => c.id === id ? { ...c, ...patch } : c));
+  const removeCharge = (id) => setOtherCharges(prev => prev.filter(c => c.id !== id));
+
+  // Auto-fill customer details on selection
+  useEffect(() => {
+    if (!customerId) return;
+    const c = state.ledgers.find(l => l.id === customerId);
+    if (c) {
+      setCustomerName(c.name);
+      if (c.address) setAddress(c.address);
+      if (c.contact) setContact(c.contact);
+      if (c.vehicle) setVehicle(c.vehicle);
+    }
+  }, [customerId]);
+
+  const reset = () => {
+    setCustomerId(''); setCustomerName(''); setAddress(''); setContact(''); setVehicle('');
+    setLines([{ id: uid('ln'), itemId: '', qty: '', rate: '' }]);
+    setOtherCharges([]); setNarration('');
+    setSavedVoucher(null);
+    setDate(todayISO());
+  };
+
+  const save = () => {
+    if (!customerName.trim()) { toast('Customer name required'); return; }
+
+    // Build a clearer error if validation fails so it doesn't look like a glitch.
+    const validLines = lines.filter(l => l.itemId && Number(l.qty) > 0);
+    if (validLines.length === 0) {
+      const hasItem = lines.some(l => l.itemId);
+      const hasQty  = lines.some(l => Number(l.qty) > 0);
+      if (!hasItem)        toast('Pick an item from the dropdown — typing alone is not enough');
+      else if (!hasQty)    toast('Enter a quantity (> 0) for the item');
+      else                 toast('Each item needs both a name and a quantity');
+      return;
+    }
+
+    // Negative-stock guard — soft warning only, save still proceeds.
+    const negList = validLines.filter(l => {
+      const it = state.items.find(i => i.id === l.itemId);
+      if (!it) return false;
+      return Number(l.qty) > stockBalance(state, l.itemId);
+    });
+
+    const next = { ...state };
+    // Find/create customer (creation defaults to Sundry Debtors for credit-tracked customers)
+    let custLedger = state.ledgers.find(l => l.id === customerId);
+    if (!custLedger) {
+      custLedger = findOrCreateParty(next, customerName, 'g_sundry_dr');
+    } else {
+      // Update party details (only for non-system, non-cash/bank parties)
+      const idx = next.ledgers.findIndex(l => l.id === custLedger.id);
+      if (!custLedger.locked) {
+        next.ledgers[idx] = { ...custLedger, address, contact, vehicle };
+      }
+    }
+
+    const voucherId = uid('vch');
+    const voucherNo = state.counters.sales;
+    const voucher = {
+      id: voucherId, type: 'sales', voucherNo, date,
+      partyId: custLedger.id, partyName: customerName, address, contact, vehicle,
+      lines: validLines.map(l => ({ ...l })),
+      otherCharges: otherCharges.filter(c => c.ledgerId && Number(c.amount) > 0),
+      total, charges, grand, narration,
+      createdAt: Date.now(),
+    };
+    next.vouchers = [...next.vouchers, voucher];
+    next.counters = { ...next.counters, sales: voucherNo + 1 };
+
+    // Update items with last sale price
+    validLines.forEach(l => {
+      const i = next.items.findIndex(it => it.id === l.itemId);
+      if (i >= 0) next.items[i] = { ...next.items[i], lastSalePrice: Number(l.rate) };
+    });
+
+    // Ledger entries: Dr Customer (or Cash/Bank), Cr Sales (+ Cr Other charge ledgers)
+    const entries = [
+      { id: uid('le'), voucherId, ledgerId: custLedger.id, dr: grand, cr: 0, date, narration: `Sales — ${customerName}` },
+      { id: uid('le'), voucherId, ledgerId: 'l_sales',     dr: 0, cr: total, date, narration: `Sales — ${customerName}` },
+    ];
+    voucher.otherCharges.forEach(c => {
+      entries.push({ id: uid('le'), voucherId, ledgerId: c.ledgerId, dr: 0, cr: Number(c.amount), date, narration: `Sales charges — ${customerName}` });
+    });
+    next.ledgerEntries = [...next.ledgerEntries, ...entries];
+
+    // Stock entries (sales = OUT)
+    const stockEntries = validLines.map(l => ({
+      id: uid('se'), voucherId, itemId: l.itemId, in: 0, out: Number(l.qty), rate: Number(l.rate), date
+    }));
+    next.stockEntries = [...next.stockEntries, ...stockEntries];
+
+    setState(next);
+    setSavedVoucher(voucher);
+    if (negList.length > 0) {
+      const names = negList.map(l => state.items.find(i => i.id === l.itemId)?.name).filter(Boolean).join(', ');
+      toast(`Sales #${voucherNo} saved · Warning: negative stock for ${names}`);
+    } else {
+      toast(`Sales #${voucherNo} saved`);
+    }
+  };
+
+  if (savedVoucher) {
+    return <VoucherSaved voucher={savedVoucher} state={state} onNew={reset} onPay={() => gotoReceipt(savedVoucher)} />;
+  }
+
+  return (
+    <div>
+      <ScreenHeader title="Sales" voucherNo={next} voucherDate={date} onDateChange={setDate} />
+
+      <div className="grid grid-cols-2 gap-x-8 gap-y-3 mb-4">
+        <div>
+          <label className="smcap text-mute block mb-1">Customer's Name</label>
+          <Picker
+            value={customerId}
+            onChange={(id, opt) => { setCustomerId(id); if (opt) setCustomerName(opt.name); }}
+            onTextChange={setCustomerName}
+            options={customers}
+            placeholder="Type to search or create…"
+            allowCreate
+            onCreate={(name) => {
+              const created = { id: uid('l'), name, groupId: 'g_sundry_dr', openingBalance: 0, contact: '', address: '', vehicle: '' };
+              setState(prev => ({ ...prev, ledgers: [...prev.ledgers, created] }));
+              setCustomerName(name);
+              return created;
+            }}
+            getMeta={(o) => {
+              const g = state.groups.find(gr => gr.id === o.groupId);
+              const tag = g ? g.name : '';
+              const ext = o.contact || o.address || '';
+              return ext ? `${tag} · ${ext}` : tag;
+            }}
+            autoFocus
+          />
+
+        </div>
+        <div>
+          <label className="smcap text-mute block mb-1">Contact</label>
+          <input value={contact} onChange={(e) => setContact(e.target.value)} className="w-full" placeholder="Phone" />
+        </div>
+        <div>
+          <label className="smcap text-mute block mb-1">Address</label>
+          <input value={address} onChange={(e) => setAddress(e.target.value)} className="w-full" placeholder="Address" />
+        </div>
+        <div>
+          <label className="smcap text-mute block mb-1">Vehicle No.</label>
+          <input value={vehicle} onChange={(e) => setVehicle(e.target.value)} className="w-full" placeholder="Optional" />
+        </div>
+      </div>
+
+      <div className="rule mb-4"></div>
+
+      <table className="ledger mb-4">
+        <thead>
+          <tr>
+            <th style={{ width: '50%' }}>Item</th>
+            <th style={{ width: '14%', textAlign: 'right' }}>Qty</th>
+            <th style={{ width: '8%' }}>Unit</th>
+            <th style={{ width: '14%', textAlign: 'right' }}>Rate</th>
+            <th style={{ width: '14%', textAlign: 'right' }}>Total</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {lines.map((l, idx) => {
+            const item = state.items.find(i => i.id === l.itemId);
+            const unit = item ? state.units.find(u => u.id === item.unitId) : null;
+            const lineTotal = (Number(l.qty) || 0) * (Number(l.rate) || 0);
+            const stock = item ? stockBalance(state, item.id) : null;
+            const wouldBeNegative = item && (Number(l.qty) || 0) > stock;
+            return (
+              <tr key={l.id}>
+                <td>
+                  <Picker
+                    value={l.itemId}
+                    onChange={(id, opt) => {
+                      const patch = { itemId: id };
+                      // Only auto-fill rate if user hasn't already typed one — avoids
+                      // clobbering manual entry when blur-time autopick fires.
+                      if (opt && opt.lastSalePrice && !Number(l.rate)) patch.rate = opt.lastSalePrice;
+                      updateLine(l.id, patch);
+                    }}
+                    options={state.items}
+                    placeholder="Select item…"
+                    getMeta={(o) => {
+                      const u = state.units.find(u => u.id === o.unitId);
+                      const s = stockBalance(state, o.id);
+                      return `Stock: ${s} ${u?.name || ''} · last sold: ${o.lastSalePrice ? '₹' + inr(o.lastSalePrice) : '—'}`;
+                    }}
+                  />
+                  {wouldBeNegative && (
+                    <div className="mt-1">
+                      <span className="chip chip-warn text-[10px]">⚠ negative stock — closing will be {stock - (Number(l.qty) || 0)}</span>
+                    </div>
+                  )}
+                </td>
+                <td><input className="num w-full" value={l.qty} onChange={(e) => updateLine(l.id, { qty: e.target.value })} /></td>
+                <td className="text-mute text-sm">{unit?.name || '—'}</td>
+                <td><input className="num w-full" value={l.rate} onChange={(e) => updateLine(l.id, { rate: e.target.value })} /></td>
+                <td className="num text-right">{inr(lineTotal)}</td>
+                <td>
+                  <button onClick={() => removeLine(l.id)} className="text-mute hover:text-gold px-2">×</button>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+
+      <button onClick={addLine} className="btn btn-ghost mb-6">+ Add Item</button>
+
+      <div className="grid grid-cols-2 gap-8">
+        <div>
+          <div className="smcap text-mute mb-2">Other Charges</div>
+          {otherCharges.map(c => (
+            <div key={c.id} className="flex gap-2 mb-2">
+              <Picker
+                value={c.ledgerId}
+                onChange={(id) => updateCharge(c.id, { ledgerId: id })}
+                options={otherChargeLedgers}
+                placeholder="Delivery / Service Charge / etc."
+                className="flex-1"
+                allowCreate
+                onCreate={(name) => {
+                  // Other Charges create under Direct Income (income), NOT Current Liabilities.
+                  const created = { id: uid('l'), name, groupId: 'g_direct_inc', openingBalance: 0 };
+                  setState(prev => ({ ...prev, ledgers: [...prev.ledgers, created] }));
+                  return created;
+                }}
+                getMeta={(o) => state.groups.find(g => g.id === o.groupId)?.name}
+              />
+              <input className="num w-32" value={c.amount} onChange={(e) => updateCharge(c.id, { amount: e.target.value })} placeholder="0.00" />
+              <button onClick={() => removeCharge(c.id)} className="text-mute hover:text-gold px-2">×</button>
+            </div>
+          ))}
+          <button onClick={addCharge} className="btn btn-ghost text-xs">+ Charge</button>
+
+          <div className="mt-4">
+            <div className="smcap text-mute mb-1">Narration</div>
+            <textarea value={narration} onChange={(e) => setNarration(e.target.value)} rows={2} className="w-full" placeholder="Optional notes…" />
+          </div>
+        </div>
+
+        <div className="bg-paper2/60 border border-rule rounded-sm p-5">
+          <div className="flex justify-between py-2 border-b border-rule">
+            <span className="text-sm">Subtotal</span>
+            <span className="num">{inr(total)}</span>
+          </div>
+          <div className="flex justify-between py-2 border-b border-rule">
+            <span className="text-sm">Other Charges</span>
+            <span className="num">{inr(charges)}</span>
+          </div>
+          <div className="flex justify-between py-3 border-b-2 border-ink">
+            <span className="display text-xl">Grand Total</span>
+            <span className="num text-xl font-semibold">₹ {inr(grand)}</span>
+          </div>
+          <div className="mt-5 flex gap-2 justify-end">
+            <button onClick={reset} className="btn btn-ghost">Clear</button>
+            <button onClick={save} className="btn btn-primary">Save Voucher · ⏎</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function VoucherSaved({ voucher, state, onNew, onPay }) {
+  const allowReceipt = voucher.type === 'sales';
+  return (
+    <div className="max-w-2xl mx-auto py-8">
+      <div className="flex items-center gap-4 mb-4">
+        <div className="seal text-base">Saved</div>
+        <div>
+          <div className="smcap text-mute">{voucher.type}</div>
+          <h2 className="display text-3xl">Voucher #{voucher.voucherNo}</h2>
+          <div className="text-mute text-sm">{fmtDate(voucher.date)} · ₹ {inr(voucher.grand || voucher.amount || 0)}</div>
+        </div>
+      </div>
+      <div className="rule mb-4"></div>
+      <p className="text-sm mb-2"><span className="text-mute">Party · </span>{voucher.partyName || '—'}</p>
+      {voucher.lines && (
+        <div className="text-sm mb-4">
+          {voucher.lines.map((l, i) => {
+            const item = state.items.find(it => it.id === l.itemId);
+            return <div key={i} className="flex justify-between py-1 border-b border-rule">
+              <span>{item?.name || '—'}</span>
+              <span className="num">{l.qty} × ₹{inr(l.rate)} = ₹{inr((Number(l.qty)||0)*(Number(l.rate)||0))}</span>
+            </div>;
+          })}
+        </div>
+      )}
+      <div className="flex gap-2 justify-end">
+        <button onClick={() => window.print()} className="btn btn-ghost">Print</button>
+        {allowReceipt && <button onClick={onPay} className="btn btn-ghost">Settle in Receipt · F4</button>}
+        <button onClick={onNew} className="btn btn-primary">New Voucher</button>
+      </div>
+    </div>
+  );
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// PURCHASES SCREEN
+// ──────────────────────────────────────────────────────────────────────────
+
+function PurchasesScreen({ state, setState, toast }) {
+  const next = state.counters.purchase;
+  const [date, setDate] = useState(todayISO());
+  const [vendorId, setVendorId] = useState('');
+  const [vendorName, setVendorName] = useState('');
+  const [address, setAddress] = useState('');
+  const [contact, setContact] = useState('');
+  const [lines, setLines] = useState([{ id: uid('ln'), itemId: '', qty: '', rate: '' }]);
+  const [narration, setNarration] = useState('');
+  const [saved, setSaved] = useState(null);
+
+  // Vendor picker: Sundry Creditors (credit vendor) + Cash in Hand + Bank Accounts + Bank O/D Accounts.
+  const vendors = useMemo(() =>
+    state.ledgers.filter(l => VENDOR_GROUPS.includes(l.groupId)),
+    [state.ledgers]);
+  const total = useMemo(() => lines.reduce((s, l) => s + (Number(l.qty) || 0) * (Number(l.rate) || 0), 0), [lines]);
+
+  useEffect(() => {
+    if (!vendorId) return;
+    const v = state.ledgers.find(l => l.id === vendorId);
+    if (v) {
+      setVendorName(v.name);
+      if (v.address) setAddress(v.address);
+      if (v.contact) setContact(v.contact);
+    }
+  }, [vendorId]);
+
+  const reset = () => {
+    setVendorId(''); setVendorName(''); setAddress(''); setContact('');
+    setLines([{ id: uid('ln'), itemId: '', qty: '', rate: '' }]);
+    setNarration(''); setSaved(null); setDate(todayISO());
+  };
+
+  const save = () => {
+    if (!vendorName.trim()) { toast('Vendor name required'); return; }
+    const validLines = lines.filter(l => l.itemId && Number(l.qty) > 0);
+    if (validLines.length === 0) {
+      const hasItem = lines.some(l => l.itemId);
+      const hasQty  = lines.some(l => Number(l.qty) > 0);
+      if (!hasItem)        toast('Pick an item from the dropdown — typing alone is not enough');
+      else if (!hasQty)    toast('Enter a quantity (> 0) for the item');
+      else                 toast('Each item needs both a name and a quantity');
+      return;
+    }
+
+    const next = { ...state };
+    let v = state.ledgers.find(l => l.id === vendorId);
+    if (!v) v = findOrCreateParty(next, vendorName, 'g_sundry_cr');
+    else if (!v.locked) {
+      const i = next.ledgers.findIndex(l => l.id === v.id);
+      next.ledgers[i] = { ...v, address, contact };
+    }
+
+    // Update items with last purchase price
+    validLines.forEach(l => {
+      const i = next.items.findIndex(it => it.id === l.itemId);
+      if (i >= 0) next.items[i] = { ...next.items[i], lastPurchasePrice: Number(l.rate) };
+    });
+
+    const voucherId = uid('vch');
+    const voucherNo = state.counters.purchase;
+    const voucher = {
+      id: voucherId, type: 'purchase', voucherNo, date,
+      partyId: v.id, partyName: vendorName, address, contact,
+      lines: validLines.map(l => ({ ...l })),
+      grand: total, narration, createdAt: Date.now(),
+    };
+    next.vouchers = [...next.vouchers, voucher];
+    next.counters = { ...next.counters, purchase: voucherNo + 1 };
+
+    // Dr Purchase, Cr Vendor (or Cr Cash/Bank if vendor side is a cash/bank ledger — same double-entry shape).
+    const entries = [
+      { id: uid('le'), voucherId, ledgerId: 'l_purchase', dr: total, cr: 0, date, narration: `Purchase — ${vendorName}` },
+      { id: uid('le'), voucherId, ledgerId: v.id,         dr: 0, cr: total, date, narration: `Purchase — ${vendorName}` },
+    ];
+    next.ledgerEntries = [...next.ledgerEntries, ...entries];
+
+    const stockEntries = validLines.map(l => ({
+      id: uid('se'), voucherId, itemId: l.itemId, in: Number(l.qty), out: 0, rate: Number(l.rate), date
+    }));
+    next.stockEntries = [...next.stockEntries, ...stockEntries];
+
+    setState(next);
+    setSaved(voucher);
+    toast(`Purchase #${voucherNo} saved`);
+  };
+
+  // Functional setters — avoid stale-closure overwrites when several fields change rapidly.
+  const addLine = () => setLines(prev => [...prev, { id: uid('ln'), itemId: '', qty: '', rate: '' }]);
+  const updateLine = (id, patch) => setLines(prev => prev.map(l => l.id === id ? { ...l, ...patch } : l));
+  const removeLine = (id) => setLines(prev => prev.length > 1 ? prev.filter(l => l.id !== id) : prev);
+
+  if (saved) return <VoucherSaved voucher={saved} state={state} onNew={reset} />;
+
+  return (
+    <div>
+      <ScreenHeader title="Purchases" voucherNo={next} voucherDate={date} onDateChange={setDate} />
+
+      <div className="grid grid-cols-2 gap-x-8 gap-y-3 mb-4">
+        <div>
+          <label className="smcap text-mute block mb-1">Vendor's Name</label>
+          <Picker
+            value={vendorId}
+            onChange={(id, opt) => { setVendorId(id); if (opt) setVendorName(opt.name); }}
+            onTextChange={setVendorName}
+            options={vendors}
+            placeholder="Type to search or create…"
+            allowCreate
+            onCreate={(name) => {
+              const created = { id: uid('l'), name, groupId: 'g_sundry_cr', openingBalance: 0, contact: '', address: '' };
+              setState(prev => ({ ...prev, ledgers: [...prev.ledgers, created] }));
+              setVendorName(name);
+              return created;
+            }}
+            getMeta={(o) => {
+              const g = state.groups.find(gr => gr.id === o.groupId);
+              const tag = g ? g.name : '';
+              const ext = o.contact || o.address || '';
+              return ext ? `${tag} · ${ext}` : tag;
+            }}
+            autoFocus
+          />
+
+        </div>
+        <div>
+          <label className="smcap text-mute block mb-1">Contact</label>
+          <input value={contact} onChange={(e) => setContact(e.target.value)} className="w-full" />
+        </div>
+        <div className="col-span-2">
+          <label className="smcap text-mute block mb-1">Address</label>
+          <input value={address} onChange={(e) => setAddress(e.target.value)} className="w-full" />
+        </div>
+      </div>
+
+      <div className="rule mb-4"></div>
+
+      <table className="ledger mb-4">
+        <thead>
+          <tr>
+            <th style={{ width: '50%' }}>Item</th>
+            <th style={{ width: '14%', textAlign: 'right' }}>Qty</th>
+            <th style={{ width: '8%' }}>Unit</th>
+            <th style={{ width: '14%', textAlign: 'right' }}>Rate</th>
+            <th style={{ width: '14%', textAlign: 'right' }}>Total</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {lines.map((l) => {
+            const item = state.items.find(i => i.id === l.itemId);
+            const unit = item ? state.units.find(u => u.id === item.unitId) : null;
+            const lineTotal = (Number(l.qty) || 0) * (Number(l.rate) || 0);
+            return (
+              <tr key={l.id}>
+                <td>
+                  <Picker
+                    value={l.itemId}
+                    onChange={(id, opt) => {
+                      const patch = { itemId: id };
+                      // Only auto-fill rate if user hasn't already typed one.
+                      if (opt && opt.lastPurchasePrice && !Number(l.rate)) patch.rate = opt.lastPurchasePrice;
+                      updateLine(l.id, patch);
+                    }}
+                    options={state.items}
+                    placeholder="Select item…"
+                    getMeta={(o) => {
+                      const u = state.units.find(u => u.id === o.unitId);
+                      return `Stock: ${stockBalance(state, o.id)} ${u?.name || ''} · last bought: ${o.lastPurchasePrice ? '₹'+inr(o.lastPurchasePrice) : '—'}`;
+                    }}
+                  />
+                </td>
+                <td><input className="num w-full" value={l.qty} onChange={(e) => updateLine(l.id, { qty: e.target.value })} /></td>
+                <td className="text-mute text-sm">{unit?.name || '—'}</td>
+                <td><input className="num w-full" value={l.rate} onChange={(e) => updateLine(l.id, { rate: e.target.value })} /></td>
+                <td className="num text-right">{inr(lineTotal)}</td>
+                <td><button onClick={() => removeLine(l.id)} className="text-mute hover:text-gold px-2">×</button></td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+      <button onClick={addLine} className="btn btn-ghost mb-6">+ Add Item</button>
+
+      <div className="grid grid-cols-2 gap-8">
+        <div>
+          <div className="smcap text-mute mb-1">Narration</div>
+          <textarea value={narration} onChange={(e) => setNarration(e.target.value)} rows={3} className="w-full" />
+        </div>
+        <div className="bg-paper2/60 border border-rule rounded-sm p-5">
+          <div className="flex justify-between py-3 border-b-2 border-ink">
+            <span className="display text-xl">Total</span>
+            <span className="num text-xl font-semibold">₹ {inr(total)}</span>
+          </div>
+          <div className="mt-5 flex gap-2 justify-end">
+            <button onClick={reset} className="btn btn-ghost">Clear</button>
+            <button onClick={save} className="btn btn-primary">Save Voucher</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// PAYMENT & RECEIPT SCREENS (similar shape, different sign)
+// ──────────────────────────────────────────────────────────────────────────
+
+function PaymentReceiptScreen({ state, setState, toast, mode, prefill }) {
+  // mode: 'PAYMENT' | 'RECEIPT'
+  const isPayment = mode === 'PAYMENT';
+  const counterKey = isPayment ? 'payment' : 'receipt';
+  const next = state.counters[counterKey];
+
+  const [date, setDate] = useState(todayISO());
+  const [accountId, setAccountId] = useState('l_cash');
+  const [partyId, setPartyId] = useState(prefill?.partyId || '');
+  const [partyName, setPartyName] = useState(prefill?.partyName || '');
+  const [otherSide, setOtherSide] = useState(prefill ? 'PARTY' : 'PARTY'); // 'PARTY' or 'OTHER'
+  const [otherLedgerId, setOtherLedgerId] = useState('');
+  const [amount, setAmount] = useState(prefill?.grand ? String(prefill.grand) : '');
+  const [narration, setNarration] = useState(prefill ? `Against Sales #${prefill.voucherNo}` : '');
+  const [saved, setSaved] = useState(null);
+
+  // Available account-type ledgers (Cash / Bank / Bank OD)
+  const accountLedgers = useMemo(() =>
+    state.ledgers.filter(l => ['g_cash', 'g_bank', 'g_bank_od'].includes(l.groupId)), [state.ledgers]);
+
+  // Parties for this mode: payment → vendors (Sundry Creditors); receipt → customers (Sundry Debtors)
+  const partyGroup = isPayment ? 'g_sundry_cr' : 'g_sundry_dr';
+  const parties = useMemo(() => state.ledgers.filter(l => l.groupId === partyGroup), [state.ledgers, partyGroup]);
+
+  // Other-side ledgers: payment → expenses + indirect; receipt → income + other charges
+  const otherLedgers = useMemo(() => state.ledgers.filter(l => {
+    const g = state.groups.find(x => x.id === l.groupId);
+    if (!g) return false;
+    if (isPayment) return g.nature === 'expense' || g.id === 'g_curr_liab' || g.id === 'g_duties' || g.id === 'g_fixed_assets';
+    return g.nature === 'income' || g.id === 'g_curr_liab' || g.id === 'g_duties';
+  }), [state.ledgers, state.groups, isPayment]);
+
+  // For party — show pending balance
+  const partyBal = useMemo(() => {
+    if (!partyId) return null;
+    return ledgerBalance(state, partyId);
+  }, [partyId, state]);
+
+  // Show pending vouchers for the selected party
+  const pendingVouchers = useMemo(() => {
+    if (!partyId) return [];
+    return state.vouchers.filter(v => v.partyId === partyId && (v.type === 'sales' || v.type === 'purchase'))
+      .slice(-5).reverse();
+  }, [partyId, state.vouchers]);
+
+  const reset = () => {
+    setAccountId('l_cash'); setPartyId(''); setPartyName(''); setOtherSide('PARTY');
+    setOtherLedgerId(''); setAmount(''); setNarration(''); setSaved(null); setDate(todayISO());
+  };
+
+  const save = () => {
+    const amt = Number(amount);
+    if (!amt || amt <= 0) { toast('Amount required'); return; }
+    if (otherSide === 'PARTY' && !partyName.trim()) { toast('Party name required'); return; }
+    if (otherSide === 'OTHER' && !otherLedgerId) { toast('Select an expense/income ledger'); return; }
+
+    const next = { ...state };
+    let counterLedgerId;
+    let counterName;
+
+    if (otherSide === 'PARTY') {
+      let p = state.ledgers.find(l => l.id === partyId);
+      if (!p) p = findOrCreateParty(next, partyName, partyGroup);
+      counterLedgerId = p.id;
+      counterName = p.name;
+    } else {
+      counterLedgerId = otherLedgerId;
+      counterName = state.ledgers.find(l => l.id === otherLedgerId)?.name || '';
+    }
+
+    const voucherId = uid('vch');
+    const voucherNo = state.counters[counterKey];
+    const voucher = {
+      id: voucherId, type: isPayment ? 'payment' : 'receipt', voucherNo, date,
+      accountId, partyId: counterLedgerId, partyName: counterName,
+      grand: amt, narration, createdAt: Date.now(),
+    };
+    next.vouchers = [...next.vouchers, voucher];
+    next.counters = { ...next.counters, [counterKey]: voucherNo + 1 };
+
+    // Payment: Dr counter (expense or vendor), Cr account
+    // Receipt: Dr account, Cr counter (customer or income)
+    const entries = isPayment ? [
+      { id: uid('le'), voucherId, ledgerId: counterLedgerId, dr: amt, cr: 0, date, narration: narration || `Payment — ${counterName}` },
+      { id: uid('le'), voucherId, ledgerId: accountId,       dr: 0, cr: amt, date, narration: narration || `Payment — ${counterName}` },
+    ] : [
+      { id: uid('le'), voucherId, ledgerId: accountId,       dr: amt, cr: 0, date, narration: narration || `Receipt — ${counterName}` },
+      { id: uid('le'), voucherId, ledgerId: counterLedgerId, dr: 0, cr: amt, date, narration: narration || `Receipt — ${counterName}` },
+    ];
+    next.ledgerEntries = [...next.ledgerEntries, ...entries];
+
+    setState(next);
+    setSaved(voucher);
+    toast(`${isPayment ? 'Payment' : 'Receipt'} #${voucherNo} saved`);
+  };
+
+  if (saved) return <VoucherSaved voucher={saved} state={state} onNew={reset} />;
+
+  return (
+    <div>
+      <ScreenHeader title={isPayment ? 'Payment' : 'Receipt'} voucherNo={next} voucherDate={date} onDateChange={setDate} />
+
+      <div className="max-w-3xl">
+        <div className="grid grid-cols-2 gap-x-8 gap-y-4 mb-5">
+          <div>
+            <label className="smcap text-mute block mb-1">Account Type</label>
+            <Picker value={accountId} onChange={(id) => setAccountId(id)} options={accountLedgers}
+                    getMeta={(o) => state.groups.find(g => g.id === o.groupId)?.name} />
+          </div>
+          <div>
+            <label className="smcap text-mute block mb-1">Amount</label>
+            <input className="num w-full text-lg" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.00" />
+          </div>
+        </div>
+
+        <div className="bg-paper2/40 border border-rule rounded-sm p-4 mb-4">
+          <div className="flex gap-1 mb-3 text-sm">
+            <button className={`btn ${otherSide === 'PARTY' ? 'btn-primary' : 'btn-ghost'}`} onClick={() => setOtherSide('PARTY')}>
+              {isPayment ? 'Pay Vendor' : 'Receive from Customer'}
+            </button>
+            <span className="text-mute self-center mx-1">or</span>
+            <button className={`btn ${otherSide === 'OTHER' ? 'btn-primary' : 'btn-ghost'}`} onClick={() => setOtherSide('OTHER')}>
+              {isPayment ? 'Direct Expense' : 'Other Income / Charge'}
+            </button>
+          </div>
+
+          {otherSide === 'PARTY' ? (
+            <div>
+              <label className="smcap text-mute block mb-1">{isPayment ? "Vendor's Name" : 'Customer Name'}</label>
+              <Picker
+                value={partyId}
+                onChange={(id, opt) => { setPartyId(id); if (opt) setPartyName(opt.name); }}
+                onTextChange={setPartyName}
+                options={parties}
+                placeholder="Type to search or create…"
+                allowCreate
+                onCreate={(name) => {
+                  const next = { ...state };
+                  const l = findOrCreateParty(next, name, partyGroup);
+                  setState(next); setPartyName(name);
+                  return l;
+                }}
+                getMeta={(o) => {
+                  const b = ledgerBalance(state, o.id);
+                  return b.amount > 0 ? `Pending: ₹${inr(b.amount)} ${b.side === 'cr' ? 'Cr (you owe)' : 'Dr (owes you)'}` : 'No balance';
+                }}
+              />
+
+              {partyBal && partyBal.amount > 0 && (
+                <div className="mt-3 px-3 py-2 bg-paper border border-rule rounded-sm">
+                  <div className="flex justify-between text-sm">
+                    <span className="smcap text-mute">{isPayment ? 'Outstanding to vendor' : 'Outstanding from customer'}</span>
+                    <span className="num font-semibold">₹ {inr(partyBal.amount)} {partyBal.side === 'cr' ? 'Cr' : 'Dr'}</span>
+                  </div>
+                  {pendingVouchers.length > 0 && (
+                    <div className="mt-2 text-xs text-mute">
+                      Recent: {pendingVouchers.map(v => `#${v.voucherNo} (${fmtDate(v.date)} ₹${inr(v.grand)})`).join(' · ')}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          ) : (
+            <div>
+              <label className="smcap text-mute block mb-1">{isPayment ? 'Expense Ledger' : 'Income / Charge Ledger'}</label>
+              <Picker
+                value={otherLedgerId}
+                onChange={(id) => setOtherLedgerId(id)}
+                options={otherLedgers}
+                placeholder="Select or create…"
+                allowCreate
+                onCreate={(name) => {
+                  const next = { ...state };
+                  const groupId = isPayment ? 'g_indirect_exp' : 'g_indirect_inc';
+                  const l = { id: uid('l'), name, groupId, openingBalance: 0 };
+                  next.ledgers.push(l); setState(next);
+                  return l;
+                }}
+                getMeta={(o) => state.groups.find(g => g.id === o.groupId)?.name}
+              />
+            </div>
+          )}
+        </div>
+
+        <div className="mb-4">
+          <label className="smcap text-mute block mb-1">Narration</label>
+          <textarea value={narration} onChange={(e) => setNarration(e.target.value)} rows={2} className="w-full" placeholder="Type anything…" />
+        </div>
+
+        <div className="flex gap-2 justify-end">
+          <button onClick={reset} className="btn btn-ghost">Clear</button>
+          <button onClick={save} className="btn btn-primary">Save Voucher</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// JOURNAL SCREEN
+// ──────────────────────────────────────────────────────────────────────────
+
+function JournalScreen({ state, setState, toast }) {
+  const next = state.counters.journal;
+  const [date, setDate] = useState(todayISO());
+  const [drId, setDrId] = useState('');
+  const [crId, setCrId] = useState('');
+  const [amount, setAmount] = useState('');
+  const [narration, setNarration] = useState('');
+  const [saved, setSaved] = useState(null);
+
+  const reset = () => { setDrId(''); setCrId(''); setAmount(''); setNarration(''); setSaved(null); setDate(todayISO()); };
+
+  const save = () => {
+    if (!drId || !crId) { toast('Select both Dr and Cr ledgers'); return; }
+    if (drId === crId) { toast('Dr and Cr must differ'); return; }
+    const amt = Number(amount);
+    if (!amt || amt <= 0) { toast('Amount required'); return; }
+
+    const next = { ...state };
+    const voucherId = uid('vch');
+    const voucherNo = state.counters.journal;
+    const drName = state.ledgers.find(l => l.id === drId)?.name;
+    const crName = state.ledgers.find(l => l.id === crId)?.name;
+    const voucher = {
+      id: voucherId, type: 'journal', voucherNo, date,
+      drId, crId, drName, crName, grand: amt, narration, createdAt: Date.now(),
+    };
+    next.vouchers = [...next.vouchers, voucher];
+    next.counters = { ...next.counters, journal: voucherNo + 1 };
+
+    const entries = [
+      { id: uid('le'), voucherId, ledgerId: drId, dr: amt, cr: 0, date, narration },
+      { id: uid('le'), voucherId, ledgerId: crId, dr: 0, cr: amt, date, narration },
+    ];
+    next.ledgerEntries = [...next.ledgerEntries, ...entries];
+
+    setState(next);
+    setSaved(voucher);
+    toast(`Journal #${voucherNo} saved`);
+  };
+
+  if (saved) return <VoucherSaved voucher={saved} state={state} onNew={reset} />;
+
+  return (
+    <div className="max-w-3xl">
+      <ScreenHeader title="Journal" voucherNo={next} voucherDate={date} onDateChange={setDate} />
+
+      <div className="grid grid-cols-[80px_1fr_1fr] gap-x-3 gap-y-3 items-center mb-4">
+        <div className="smcap text-wax">By / Dr</div>
+        <Picker value={drId} onChange={setDrId} options={state.ledgers}
+                getMeta={(o) => state.groups.find(g => g.id === o.groupId)?.name}
+                placeholder="Debit ledger…" />
+        <input className="num" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="Amount" />
+
+        <div className="smcap text-wax">To / Cr</div>
+        <Picker value={crId} onChange={setCrId} options={state.ledgers}
+                getMeta={(o) => state.groups.find(g => g.id === o.groupId)?.name}
+                placeholder="Credit ledger…" />
+        <div className="num text-right text-mute">{amount && `₹ ${inr(Number(amount))}`}</div>
+      </div>
+
+      <div className="mb-5">
+        <div className="smcap text-mute mb-1">Narration</div>
+        <textarea value={narration} onChange={(e) => setNarration(e.target.value)} rows={2} className="w-full" placeholder="Can type anything…" />
+      </div>
+
+      <div className="flex gap-2 justify-end">
+        <button onClick={reset} className="btn btn-ghost">Clear</button>
+        <button onClick={save} className="btn btn-primary">Save Voucher</button>
+      </div>
+    </div>
+  );
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// MASTERS — Accounts & Inventory
+// ──────────────────────────────────────────────────────────────────────────
+
+function MastersScreen({ state, setState, toast }) {
+  const [tab, setTab] = useState('accounts');
+  return (
+    <div>
+      <ScreenHeader title="Masters" />
+      <div className="border-b border-rule mb-5 flex gap-1">
+        <button onClick={() => setTab('accounts')} className={`px-4 py-2 text-sm font-semibold border-b-2 ${tab === 'accounts' ? 'border-wax text-wax' : 'border-transparent text-mute hover:text-ink'}`}>
+          Accounts Master
+        </button>
+        <button onClick={() => setTab('inventory')} className={`px-4 py-2 text-sm font-semibold border-b-2 ${tab === 'inventory' ? 'border-wax text-wax' : 'border-transparent text-mute hover:text-ink'}`}>
+          Inventory Master
+        </button>
+      </div>
+      {tab === 'accounts' ? <AccountsMaster state={state} setState={setState} toast={toast} /> : <InventoryMaster state={state} setState={setState} toast={toast} />}
+    </div>
+  );
+}
+
+function AccountsMaster({ state, setState, toast }) {
+  const [editing, setEditing] = useState(null); // null | { id, name, groupId, openingBalance, contact, address }
+  const [showGroupList, setShowGroupList] = useState(false);
+
+  const groupOf = (gid) => state.groups.find(g => g.id === gid);
+  const ledgersByGroup = useMemo(() => {
+    const map = {};
+    state.groups.forEach(g => map[g.id] = []);
+    state.ledgers.forEach(l => { if (map[l.groupId]) map[l.groupId].push(l); });
+    return map;
+  }, [state.ledgers, state.groups]);
+
+  const create = () => setEditing({ id: '', name: '', groupId: '', openingBalance: '', contact: '', address: '' });
+  const editL = (l) => setEditing({ ...l, openingBalance: String(l.openingBalance || '') });
+
+  const remove = (l) => {
+    if (l.locked) { toast('System ledger cannot be deleted'); return; }
+    const used = state.ledgerEntries.some(e => e.ledgerId === l.id) || state.vouchers.some(v => v.partyId === l.id);
+    if (used) { toast('Ledger has transactions — cannot delete'); return; }
+    if (!confirm(`Delete ledger "${l.name}"?`)) return;
+    setState({ ...state, ledgers: state.ledgers.filter(x => x.id !== l.id) });
+    toast('Ledger deleted');
+  };
+
+  const save = () => {
+    if (!editing.name.trim()) { toast('Name required'); return; }
+    if (!editing.groupId) { toast('Select a group'); return; }
+    const next = { ...state };
+    if (editing.id) {
+      const i = next.ledgers.findIndex(l => l.id === editing.id);
+      next.ledgers[i] = { ...next.ledgers[i], name: editing.name.trim(), groupId: editing.groupId, openingBalance: Number(editing.openingBalance) || 0, contact: editing.contact, address: editing.address };
+    } else {
+      next.ledgers.push({ id: uid('l'), name: editing.name.trim(), groupId: editing.groupId, openingBalance: Number(editing.openingBalance) || 0, contact: editing.contact, address: editing.address });
+    }
+    setState(next); setEditing(null); toast('Ledger saved');
+  };
+
+  return (
+    <div>
+      <div className="flex gap-2 mb-4">
+        <button onClick={create} className="btn btn-primary">+ Create Ledger</button>
+        <button onClick={() => setShowGroupList(true)} className="btn btn-ghost">View 19 Predefined Groups</button>
+      </div>
+
+      <div className="grid grid-cols-2 gap-x-8 gap-y-2">
+        {state.groups.map(g => (
+          <div key={g.id} className="mb-3">
+            <div className="flex items-baseline justify-between border-b border-rule pb-1 mb-1">
+              <span className="smcap text-ink2">{g.name}</span>
+              <span className="text-xs text-mute italic">{g.nature}</span>
+            </div>
+            {ledgersByGroup[g.id]?.length === 0 && <div className="text-xs text-mute italic py-1">— no ledgers —</div>}
+            {ledgersByGroup[g.id]?.map(l => {
+              const bal = ledgerBalance(state, l.id);
+              return (
+                <div key={l.id} className="group flex items-center justify-between py-1 hover:bg-paper2/40 px-1 rounded-sm">
+                  <span className="text-sm flex items-center gap-2">
+                    {l.name}
+                    {l.locked && <span className="chip text-[10px]">system</span>}
+                  </span>
+                  <span className="flex items-center gap-3">
+                    <span className="num text-xs text-mute">{bal.amount > 0 ? `₹${inr(bal.amount)} ${bal.side}` : '—'}</span>
+                    <button onClick={() => editL(l)} className="opacity-0 group-hover:opacity-100 text-xs text-wax">Edit</button>
+                    {!l.locked && <button onClick={() => remove(l)} className="opacity-0 group-hover:opacity-100 text-xs text-mute hover:text-gold">×</button>}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        ))}
+      </div>
+
+      <Modal open={!!editing} onClose={() => setEditing(null)} title={editing?.id ? 'Alter Ledger' : 'Create Ledger'}
+             footer={<>
+               <button onClick={() => setEditing(null)} className="btn btn-ghost">Cancel</button>
+               <button onClick={save} className="btn btn-primary">Save</button>
+             </>}>
+        {editing && (
+          <div className="space-y-3">
+            <div>
+              <label className="smcap text-mute block mb-1">Ledger Name</label>
+              <input value={editing.name} onChange={(e) => setEditing({ ...editing, name: e.target.value })} className="w-full" autoFocus />
+            </div>
+            <div>
+              <label className="smcap text-mute block mb-1">Select Group</label>
+              <select value={editing.groupId} onChange={(e) => setEditing({ ...editing, groupId: e.target.value })} className="w-full">
+                <option value="">— select —</option>
+                {state.groups.map(g => <option key={g.id} value={g.id}>{g.name} ({g.nature})</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="smcap text-mute block mb-1">Opening Balance</label>
+              <input className="num w-full" value={editing.openingBalance} onChange={(e) => setEditing({ ...editing, openingBalance: e.target.value })} placeholder="0.00" />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="smcap text-mute block mb-1">Contact</label>
+                <input value={editing.contact || ''} onChange={(e) => setEditing({ ...editing, contact: e.target.value })} className="w-full" placeholder="Optional" />
+              </div>
+              <div>
+                <label className="smcap text-mute block mb-1">Address</label>
+                <input value={editing.address || ''} onChange={(e) => setEditing({ ...editing, address: e.target.value })} className="w-full" placeholder="Optional" />
+              </div>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      <Modal open={showGroupList} onClose={() => setShowGroupList(false)} title="Predefined Ledger Groups">
+        <table className="ledger">
+          <thead><tr><th>#</th><th>Group</th><th>Nature</th></tr></thead>
+          <tbody>
+            {state.groups.map((g, i) => (
+              <tr key={g.id}><td className="num text-mute">{i+1}</td><td>{g.name}</td><td className="text-mute italic">{g.nature}</td></tr>
+            ))}
+          </tbody>
+        </table>
+      </Modal>
+    </div>
+  );
+}
+
+function InventoryMaster({ state, setState, toast }) {
+  const [editingItem, setEditingItem] = useState(null);
+  const [editingUnit, setEditingUnit] = useState(null);
+  const [editingSuper, setEditingSuper] = useState(null);
+  const [editingSub, setEditingSub] = useState(null);
+
+  const saveItem = () => {
+    if (!editingItem.name.trim()) { toast('Item name required'); return; }
+    const next = { ...state };
+    if (editingItem.id) {
+      const i = next.items.findIndex(x => x.id === editingItem.id);
+      next.items[i] = { ...next.items[i], ...editingItem, openingBalance: Number(editingItem.openingBalance) || 0 };
+    } else {
+      next.items.push({ id: uid('it'), ...editingItem, openingBalance: Number(editingItem.openingBalance) || 0 });
+    }
+    setState(next); setEditingItem(null); toast('Item saved');
+  };
+
+  const removeItem = (it) => {
+    const used = state.stockEntries.some(e => e.itemId === it.id);
+    if (used) { toast('Item has transactions — cannot delete'); return; }
+    if (!confirm(`Delete item "${it.name}"?`)) return;
+    setState({ ...state, items: state.items.filter(x => x.id !== it.id) });
+  };
+
+  const saveUnit = () => {
+    if (!editingUnit.name.trim()) return;
+    const next = { ...state };
+    if (editingUnit.id) {
+      const i = next.units.findIndex(u => u.id === editingUnit.id);
+      next.units[i] = { ...next.units[i], name: editingUnit.name.trim() };
+    } else {
+      next.units.push({ id: uid('u'), name: editingUnit.name.trim() });
+    }
+    setState(next); setEditingUnit(null);
+  };
+  const saveSuper = () => {
+    if (!editingSuper.name.trim()) return;
+    const next = { ...state };
+    if (editingSuper.id) {
+      const i = next.superCategories.findIndex(s => s.id === editingSuper.id);
+      next.superCategories[i] = { ...next.superCategories[i], name: editingSuper.name.trim() };
+    } else {
+      next.superCategories.push({ id: uid('sc'), name: editingSuper.name.trim() });
+    }
+    setState(next); setEditingSuper(null);
+  };
+  const saveSub = () => {
+    if (!editingSub.name.trim()) return;
+    const next = { ...state };
+    if (editingSub.id) {
+      const i = next.subCategories.findIndex(s => s.id === editingSub.id);
+      next.subCategories[i] = { ...next.subCategories[i], name: editingSub.name.trim(), superCategoryId: editingSub.superCategoryId };
+    } else {
+      next.subCategories.push({ id: uid('sb'), name: editingSub.name.trim(), superCategoryId: editingSub.superCategoryId });
+    }
+    setState(next); setEditingSub(null);
+  };
+
+  return (
+    <div className="grid grid-cols-3 gap-6">
+      {/* Units */}
+      <div>
+        <div className="flex justify-between items-baseline mb-2">
+          <h3 className="display text-lg">Units</h3>
+          <button onClick={() => setEditingUnit({ id: '', name: '' })} className="text-wax text-sm">+ Create</button>
+        </div>
+        <div className="border border-rule rounded-sm overflow-hidden">
+          {state.units.map(u => (
+            <div key={u.id} className="px-3 py-2 border-b border-rule last:border-b-0 flex justify-between items-center hover:bg-paper2/40 group">
+              <span className="text-sm">{u.name}</span>
+              <span className="opacity-0 group-hover:opacity-100 flex gap-2">
+                <button onClick={() => setEditingUnit(u)} className="text-xs text-wax">Edit</button>
+                <button onClick={() => {
+                  if (state.items.some(i => i.unitId === u.id)) { toast('Unit in use'); return; }
+                  if (confirm('Delete?')) setState({ ...state, units: state.units.filter(x => x.id !== u.id) });
+                }} className="text-xs text-mute hover:text-gold">×</button>
+              </span>
+            </div>
+          ))}
+          {state.units.length === 0 && <div className="px-3 py-4 text-center text-mute text-sm italic">No units yet</div>}
+        </div>
+      </div>
+
+      {/* Super Categories */}
+      <div>
+        <div className="flex justify-between items-baseline mb-2">
+          <h3 className="display text-lg">Super Categories</h3>
+          <button onClick={() => setEditingSuper({ id: '', name: '' })} className="text-wax text-sm">+ Create</button>
+        </div>
+        <div className="border border-rule rounded-sm overflow-hidden">
+          {state.superCategories.map(s => (
+            <div key={s.id} className="px-3 py-2 border-b border-rule last:border-b-0 flex justify-between items-center hover:bg-paper2/40 group">
+              <span className="text-sm">{s.name}</span>
+              <span className="opacity-0 group-hover:opacity-100 flex gap-2">
+                <button onClick={() => setEditingSuper(s)} className="text-xs text-wax">Edit</button>
+                <button onClick={() => {
+                  if (state.items.some(i => i.superCategoryId === s.id) || state.subCategories.some(sb => sb.superCategoryId === s.id)) { toast('Category in use'); return; }
+                  if (confirm('Delete?')) setState({ ...state, superCategories: state.superCategories.filter(x => x.id !== s.id) });
+                }} className="text-xs text-mute hover:text-gold">×</button>
+              </span>
+            </div>
+          ))}
+          {state.superCategories.length === 0 && <div className="px-3 py-4 text-center text-mute text-sm italic">None yet</div>}
+        </div>
+      </div>
+
+      {/* Sub Categories */}
+      <div>
+        <div className="flex justify-between items-baseline mb-2">
+          <h3 className="display text-lg">Sub Categories</h3>
+          <button onClick={() => setEditingSub({ id: '', name: '', superCategoryId: '' })} className="text-wax text-sm">+ Create</button>
+        </div>
+        <div className="border border-rule rounded-sm overflow-hidden">
+          {state.subCategories.map(s => {
+            const sup = state.superCategories.find(x => x.id === s.superCategoryId);
+            return (
+              <div key={s.id} className="px-3 py-2 border-b border-rule last:border-b-0 flex justify-between items-center hover:bg-paper2/40 group">
+                <span className="text-sm">{s.name} <span className="text-mute text-xs">/ {sup?.name || '—'}</span></span>
+                <span className="opacity-0 group-hover:opacity-100 flex gap-2">
+                  <button onClick={() => setEditingSub(s)} className="text-xs text-wax">Edit</button>
+                  <button onClick={() => {
+                    if (state.items.some(i => i.subCategoryId === s.id)) { toast('Sub-cat in use'); return; }
+                    if (confirm('Delete?')) setState({ ...state, subCategories: state.subCategories.filter(x => x.id !== s.id) });
+                  }} className="text-xs text-mute hover:text-gold">×</button>
+                </span>
+              </div>
+            );
+          })}
+          {state.subCategories.length === 0 && <div className="px-3 py-4 text-center text-mute text-sm italic">None yet</div>}
+        </div>
+      </div>
+
+      {/* Items */}
+      <div className="col-span-3 mt-4">
+        <div className="flex justify-between items-baseline mb-2">
+          <h3 className="display text-xl">Items</h3>
+          <button onClick={() => setEditingItem({ id: '', name: '', unitId: '', superCategoryId: '', subCategoryId: '', openingBalance: '', lastSalePrice: '', lastPurchasePrice: '' })}
+                  className="btn btn-primary">+ Create Item</button>
+        </div>
+        <table className="ledger">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Unit</th>
+              <th>Super Cat.</th>
+              <th>Sub Cat.</th>
+              <th style={{ textAlign: 'right' }}>Opening</th>
+              <th style={{ textAlign: 'right' }}>Stock</th>
+              <th style={{ textAlign: 'right' }}>Last Sold</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {state.items.map(it => {
+              const unit = state.units.find(u => u.id === it.unitId);
+              const sup = state.superCategories.find(s => s.id === it.superCategoryId);
+              const sub = state.subCategories.find(s => s.id === it.subCategoryId);
+              const stk = stockBalance(state, it.id);
+              return (
+                <tr key={it.id} className="group">
+                  <td className="font-medium">{it.name}</td>
+                  <td>{unit?.name || '—'}</td>
+                  <td className="text-mute">{sup?.name || '—'}</td>
+                  <td className="text-mute">{sub?.name || '—'}</td>
+                  <td className="num text-right">{Number(it.openingBalance) || 0}</td>
+                  <td className="num text-right font-semibold">{stk}</td>
+                  <td className="num text-right text-mute">{it.lastSalePrice ? '₹'+inr(it.lastSalePrice) : '—'}</td>
+                  <td className="text-right">
+                    <button onClick={() => setEditingItem({ ...it, openingBalance: String(it.openingBalance || '') })} className="opacity-0 group-hover:opacity-100 text-wax text-xs mr-2">Edit</button>
+                    <button onClick={() => removeItem(it)} className="opacity-0 group-hover:opacity-100 text-mute hover:text-gold text-xs">×</button>
+                  </td>
+                </tr>
+              );
+            })}
+            {state.items.length === 0 && (
+              <tr><td colSpan="8" className="text-center text-mute italic py-8">No items yet — click Create Item to add your first product</td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Modals */}
+      <Modal open={!!editingUnit} onClose={() => setEditingUnit(null)} title={editingUnit?.id ? 'Alter Unit' : 'Create Unit'}
+             footer={<><button onClick={() => setEditingUnit(null)} className="btn btn-ghost">Cancel</button><button onClick={saveUnit} className="btn btn-primary">Save</button></>}>
+        {editingUnit && <input value={editingUnit.name} onChange={(e) => setEditingUnit({ ...editingUnit, name: e.target.value })} className="w-full" placeholder="Unit name (e.g. Kg)" autoFocus />}
+      </Modal>
+
+      <Modal open={!!editingSuper} onClose={() => setEditingSuper(null)} title={editingSuper?.id ? 'Alter Super Category' : 'Create Super Category'}
+             footer={<><button onClick={() => setEditingSuper(null)} className="btn btn-ghost">Cancel</button><button onClick={saveSuper} className="btn btn-primary">Save</button></>}>
+        {editingSuper && <input value={editingSuper.name} onChange={(e) => setEditingSuper({ ...editingSuper, name: e.target.value })} className="w-full" placeholder="e.g. Spare Parts" autoFocus />}
+      </Modal>
+
+      <Modal open={!!editingSub} onClose={() => setEditingSub(null)} title={editingSub?.id ? 'Alter Sub Category' : 'Create Sub Category'}
+             footer={<><button onClick={() => setEditingSub(null)} className="btn btn-ghost">Cancel</button><button onClick={saveSub} className="btn btn-primary">Save</button></>}>
+        {editingSub && (
+          <div className="space-y-3">
+            <input value={editingSub.name} onChange={(e) => setEditingSub({ ...editingSub, name: e.target.value })} className="w-full" placeholder="e.g. Bengali" autoFocus />
+            <select value={editingSub.superCategoryId} onChange={(e) => setEditingSub({ ...editingSub, superCategoryId: e.target.value })} className="w-full">
+              <option value="">— Super Category —</option>
+              {state.superCategories.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+            </select>
+          </div>
+        )}
+      </Modal>
+
+      <Modal open={!!editingItem} onClose={() => setEditingItem(null)} title={editingItem?.id ? 'Alter Item' : 'Create Item'}
+             footer={<><button onClick={() => setEditingItem(null)} className="btn btn-ghost">Cancel</button><button onClick={saveItem} className="btn btn-primary">Save</button></>}>
+        {editingItem && (
+          <div className="space-y-3">
+            <div>
+              <label className="smcap text-mute block mb-1">Item Name</label>
+              <input value={editingItem.name} onChange={(e) => setEditingItem({ ...editingItem, name: e.target.value })} className="w-full" autoFocus />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="smcap text-mute block mb-1">Unit</label>
+                <select value={editingItem.unitId} onChange={(e) => setEditingItem({ ...editingItem, unitId: e.target.value })} className="w-full">
+                  <option value="">— Unit —</option>
+                  {state.units.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="smcap text-mute block mb-1">Opening Balance</label>
+                <input className="num w-full" value={editingItem.openingBalance} onChange={(e) => setEditingItem({ ...editingItem, openingBalance: e.target.value })} placeholder="0" />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="smcap text-mute block mb-1">Super Category</label>
+                <select value={editingItem.superCategoryId} onChange={(e) => setEditingItem({ ...editingItem, superCategoryId: e.target.value, subCategoryId: '' })} className="w-full">
+                  <option value="">— None —</option>
+                  {state.superCategories.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="smcap text-mute block mb-1">Sub Category</label>
+                <select value={editingItem.subCategoryId} onChange={(e) => setEditingItem({ ...editingItem, subCategoryId: e.target.value })} className="w-full">
+                  <option value="">— None —</option>
+                  {state.subCategories.filter(s => !editingItem.superCategoryId || s.superCategoryId === editingItem.superCategoryId).map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                </select>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="smcap text-mute block mb-1">Default Sale Price</label>
+                <input className="num w-full" value={editingItem.lastSalePrice || ''} onChange={(e) => setEditingItem({ ...editingItem, lastSalePrice: e.target.value })} placeholder="0.00" />
+              </div>
+              <div>
+                <label className="smcap text-mute block mb-1">Default Purchase Price</label>
+                <input className="num w-full" value={editingItem.lastPurchasePrice || ''} onChange={(e) => setEditingItem({ ...editingItem, lastPurchasePrice: e.target.value })} placeholder="0.00" />
+              </div>
+            </div>
+          </div>
+        )}
+      </Modal>
+    </div>
+  );
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// REPORTS
+// ──────────────────────────────────────────────────────────────────────────
+
+const REPORT_LIST = [
+  { id: 'sales',     name: 'Sales Reports' },
+  { id: 'itemsales', name: 'Item-wise Sales Reports' },
+  { id: 'gp',        name: 'Gross Profit Reports' },
+  { id: 'vendor',    name: 'Vendor Analysis Reports' },
+  { id: 'stock',     name: 'Stock Summary' },
+  { id: 'bs',        name: 'Balance Sheet' },
+  { id: 'pl',        name: 'Profit & Loss Account' },
+  { id: 'cf',        name: 'Cash Flow Statement' },
+];
+
+function ReportsScreen({ state }) {
+  const [active, setActive] = useState('sales');
+  const [from, setFrom] = useState(state.meta.fyStart || `${new Date().getFullYear()}-04-01`);
+  const [to, setTo] = useState(todayISO());
+
+  return (
+    <div>
+      <ScreenHeader title="Reports" right={
+        <div className="flex gap-3 items-center">
+          <label className="text-sm flex items-center gap-2"><span className="smcap text-mute">From</span><input type="date" value={from} onChange={(e) => setFrom(e.target.value)} /></label>
+          <label className="text-sm flex items-center gap-2"><span className="smcap text-mute">To</span><input type="date" value={to} onChange={(e) => setTo(e.target.value)} /></label>
+        </div>
+      } />
+
+      <div className="grid grid-cols-[220px_1fr] gap-6">
+        <div>
+          {REPORT_LIST.map(r => (
+            <button key={r.id} onClick={() => setActive(r.id)}
+                    className={`block w-full text-left px-3 py-2 text-sm border-l-2 ${active === r.id ? 'border-wax text-wax bg-paper2/60 font-semibold' : 'border-transparent text-ink2 hover:bg-paper2/40'}`}>
+              {r.name}
+            </button>
+          ))}
+        </div>
+        <div className="bg-paper border border-rule rounded-sm p-5">
+          {active === 'sales'     && <SalesReport state={state} from={from} to={to} />}
+          {active === 'itemsales' && <ItemSalesReport state={state} from={from} to={to} />}
+          {active === 'gp'        && <GrossProfitReport state={state} from={from} to={to} />}
+          {active === 'vendor'    && <VendorAnalysisReport state={state} from={from} to={to} />}
+          {active === 'stock'     && <StockSummary state={state} from={from} to={to} />}
+          {active === 'bs'        && <BalanceSheet state={state} asOf={to} />}
+          {active === 'pl'        && <ProfitLoss state={state} from={from} to={to} />}
+          {active === 'cf'        && <CashFlow state={state} from={from} to={to} />}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function inRange(date, from, to) {
+  return date >= from && date <= to;
+}
+
+function SalesReport({ state, from, to }) {
+  const sales = state.vouchers.filter(v => v.type === 'sales' && inRange(v.date, from, to));
+  const total = sales.reduce((s, v) => s + (v.grand || 0), 0);
+  // Daily totals for chart
+  const byDay = {};
+  sales.forEach(v => { byDay[v.date] = (byDay[v.date] || 0) + (v.grand || 0); });
+  const chartData = Object.keys(byDay).sort().map(d => ({ date: d.slice(5), amount: byDay[d] }));
+
+  return (
+    <div>
+      <div className="flex justify-between items-baseline mb-3">
+        <h3 className="display text-2xl">Sales Reports</h3>
+        <div className="text-right"><div className="smcap text-mute">Total</div><div className="num text-2xl font-semibold">₹ {inr(total)}</div></div>
+      </div>
+      {chartData.length > 0 && ChartsAvailable && (
+        <div className="h-48 mb-5">
+          <ResponsiveContainer>
+            <BarChart data={chartData}>
+              <CartesianGrid strokeDasharray="2 4" stroke="#c2b791" />
+              <XAxis dataKey="date" tick={{ fontSize: 10, fill: '#7a7464' }} />
+              <YAxis tick={{ fontSize: 10, fill: '#7a7464' }} />
+              <Tooltip contentStyle={{ background: '#f5efe1', border: '1px solid #c2b791', borderRadius: 2, fontSize: 12 }} formatter={(v) => '₹ ' + inr(v)} />
+              <Bar dataKey="amount" fill="#1b6e84" />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+      <table className="ledger">
+        <thead><tr><th>Date</th><th>Voucher</th><th>Customer</th><th style={{textAlign:'right'}}>Amount</th></tr></thead>
+        <tbody>
+          {sales.length === 0 && <tr><td colSpan="4" className="text-mute italic py-6 text-center">No sales in this range</td></tr>}
+          {sales.map(v => (
+            <tr key={v.id}>
+              <td className="num text-mute">{fmtDate(v.date)}</td>
+              <td className="num">#{v.voucherNo}</td>
+              <td>{v.partyName}</td>
+              <td className="num text-right">₹ {inr(v.grand)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function ItemSalesReport({ state, from, to }) {
+  const tally = {};
+  state.stockEntries.forEach(e => {
+    if (!inRange(e.date, from, to)) return;
+    if (e.out === 0) return;
+    if (!tally[e.itemId]) tally[e.itemId] = { qty: 0, amount: 0 };
+    tally[e.itemId].qty += Number(e.out) || 0;
+    tally[e.itemId].amount += (Number(e.out) || 0) * (Number(e.rate) || 0);
+  });
+  const rows = Object.keys(tally).map(itemId => {
+    const item = state.items.find(i => i.id === itemId);
+    const unit = item ? state.units.find(u => u.id === item.unitId) : null;
+    return { id: itemId, name: item?.name || 'Unknown', unit: unit?.name || '', qty: tally[itemId].qty, amount: tally[itemId].amount };
+  }).sort((a, b) => b.amount - a.amount);
+  const totalAmount = rows.reduce((s, r) => s + r.amount, 0);
+
+  const top = rows.slice(0, 7);
+
+  return (
+    <div>
+      <h3 className="display text-2xl mb-3">Item-wise Sales</h3>
+      {top.length > 0 && ChartsAvailable && (
+        <div className="h-56 mb-5">
+          <ResponsiveContainer>
+            <BarChart data={top} layout="vertical" margin={{ left: 80 }}>
+              <CartesianGrid strokeDasharray="2 4" stroke="#c2b791" />
+              <XAxis type="number" tick={{ fontSize: 10, fill: '#7a7464' }} />
+              <YAxis type="category" dataKey="name" tick={{ fontSize: 10, fill: '#3d3a36' }} width={120} />
+              <Tooltip contentStyle={{ background: '#f5efe1', border: '1px solid #c2b791', borderRadius: 2, fontSize: 12 }} formatter={(v) => '₹ ' + inr(v)} />
+              <Bar dataKey="amount" fill="#1b6e84" />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+      <table className="ledger">
+        <thead><tr><th>Item</th><th>Unit</th><th style={{textAlign:'right'}}>Qty Sold</th><th style={{textAlign:'right'}}>Amount</th><th style={{textAlign:'right'}}>%</th></tr></thead>
+        <tbody>
+          {rows.length === 0 && <tr><td colSpan="5" className="text-mute italic py-6 text-center">No sales</td></tr>}
+          {rows.map(r => (
+            <tr key={r.id}>
+              <td>{r.name}</td>
+              <td className="text-mute">{r.unit}</td>
+              <td className="num text-right">{r.qty}</td>
+              <td className="num text-right">₹ {inr(r.amount)}</td>
+              <td className="num text-right text-mute">{totalAmount ? ((r.amount/totalAmount)*100).toFixed(1) : '0'}%</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function GrossProfitReport({ state, from, to }) {
+  // For each sales line, find avg cost from purchases
+  const itemAvgCost = {};
+  state.items.forEach(it => {
+    const purchases = state.stockEntries.filter(e => e.itemId === it.id && e.in > 0);
+    if (purchases.length === 0) {
+      itemAvgCost[it.id] = Number(it.lastPurchasePrice) || 0;
+    } else {
+      const totQty = purchases.reduce((s, p) => s + p.in, 0);
+      const totVal = purchases.reduce((s, p) => s + p.in * p.rate, 0);
+      itemAvgCost[it.id] = totQty ? totVal / totQty : 0;
+    }
+  });
+  const sales = state.vouchers.filter(v => v.type === 'sales' && inRange(v.date, from, to));
+  const rows = [];
+  let totalSales = 0, totalCogs = 0;
+  sales.forEach(v => {
+    let saleAmt = 0, cogs = 0;
+    v.lines?.forEach(l => {
+      const amt = (Number(l.qty) || 0) * (Number(l.rate) || 0);
+      saleAmt += amt;
+      cogs += (Number(l.qty) || 0) * (itemAvgCost[l.itemId] || 0);
+    });
+    totalSales += saleAmt;
+    totalCogs += cogs;
+    rows.push({ id: v.id, no: v.voucherNo, date: v.date, party: v.partyName, sale: saleAmt, cogs, gp: saleAmt - cogs });
+  });
+  const gp = totalSales - totalCogs;
+  const margin = totalSales ? (gp / totalSales) * 100 : 0;
+
+  return (
+    <div>
+      <div className="flex justify-between items-baseline mb-3">
+        <h3 className="display text-2xl">Gross Profit · Sales − COGS</h3>
+        <div className="text-right">
+          <div className="smcap text-mute">Gross Profit</div>
+          <div className="num text-2xl font-semibold">₹ {inr(gp)}</div>
+          <div className="num text-xs text-mute">{margin.toFixed(1)}% margin</div>
+        </div>
+      </div>
+      <div className="grid grid-cols-3 gap-3 mb-5">
+        <div className="bg-paper2/50 border border-rule p-3 rounded-sm"><div className="smcap text-mute">Sales</div><div className="num text-xl">₹ {inr(totalSales)}</div></div>
+        <div className="bg-paper2/50 border border-rule p-3 rounded-sm"><div className="smcap text-mute">COGS</div><div className="num text-xl">₹ {inr(totalCogs)}</div></div>
+        <div className="bg-paper2/50 border border-rule p-3 rounded-sm"><div className="smcap text-mute">Gross Profit</div><div className="num text-xl text-ok">₹ {inr(gp)}</div></div>
+      </div>
+      <table className="ledger">
+        <thead><tr><th>Date</th><th>Voucher</th><th>Customer</th><th style={{textAlign:'right'}}>Sale</th><th style={{textAlign:'right'}}>COGS</th><th style={{textAlign:'right'}}>GP</th></tr></thead>
+        <tbody>
+          {rows.length === 0 && <tr><td colSpan="6" className="text-mute italic py-6 text-center">No sales</td></tr>}
+          {rows.map(r => (
+            <tr key={r.id}>
+              <td className="num text-mute">{fmtDate(r.date)}</td>
+              <td className="num">#{r.no}</td>
+              <td>{r.party}</td>
+              <td className="num text-right">₹ {inr(r.sale)}</td>
+              <td className="num text-right text-mute">₹ {inr(r.cogs)}</td>
+              <td className="num text-right font-semibold">₹ {inr(r.gp)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function VendorAnalysisReport({ state, from, to }) {
+  const tally = {};
+  state.vouchers.filter(v => v.type === 'purchase' && inRange(v.date, from, to)).forEach(v => {
+    if (!tally[v.partyId]) tally[v.partyId] = { name: v.partyName, count: 0, amount: 0 };
+    tally[v.partyId].count += 1;
+    tally[v.partyId].amount += v.grand || 0;
+  });
+  const rows = Object.keys(tally).map(id => ({
+    id, ...tally[id], balance: ledgerBalance(state, id),
+  })).sort((a, b) => b.amount - a.amount);
+  const total = rows.reduce((s, r) => s + r.amount, 0);
+
+  return (
+    <div>
+      <h3 className="display text-2xl mb-3">Vendor Analysis</h3>
+      <table className="ledger">
+        <thead><tr><th>Vendor</th><th style={{textAlign:'right'}}>Bills</th><th style={{textAlign:'right'}}>Total</th><th style={{textAlign:'right'}}>%</th><th style={{textAlign:'right'}}>Outstanding</th></tr></thead>
+        <tbody>
+          {rows.length === 0 && <tr><td colSpan="5" className="text-mute italic py-6 text-center">No purchases in range</td></tr>}
+          {rows.map(r => (
+            <tr key={r.id}>
+              <td>{r.name}</td>
+              <td className="num text-right">{r.count}</td>
+              <td className="num text-right">₹ {inr(r.amount)}</td>
+              <td className="num text-right text-mute">{total ? ((r.amount/total)*100).toFixed(1) : '0'}%</td>
+              <td className="num text-right">{r.balance.amount > 0 ? `₹ ${inr(r.balance.amount)} ${r.balance.side}` : '—'}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function StockSummary({ state, from, to }) {
+  const rows = state.items.map(it => {
+    const opening = (() => {
+      let bal = Number(it.openingBalance) || 0;
+      state.stockEntries.forEach(e => {
+        if (e.itemId !== it.id) return;
+        if (e.date < from) bal += (Number(e.in) || 0) - (Number(e.out) || 0);
+      });
+      return bal;
+    })();
+    let inQty = 0, outQty = 0;
+    state.stockEntries.forEach(e => {
+      if (e.itemId !== it.id) return;
+      if (!inRange(e.date, from, to)) return;
+      inQty += Number(e.in) || 0;
+      outQty += Number(e.out) || 0;
+    });
+    const closing = opening + inQty - outQty;
+    const unit = state.units.find(u => u.id === it.unitId);
+    return { id: it.id, name: it.name, unit: unit?.name || '', opening, inQty, outQty, closing };
+  });
+
+  return (
+    <div>
+      <h3 className="display text-2xl mb-3">Stock Summary</h3>
+      <table className="ledger">
+        <thead><tr><th>Item</th><th>Unit</th><th style={{textAlign:'right'}}>Opening</th><th style={{textAlign:'right'}}>Inward</th><th style={{textAlign:'right'}}>Outward</th><th style={{textAlign:'right'}}>Closing</th></tr></thead>
+        <tbody>
+          {rows.length === 0 && <tr><td colSpan="6" className="text-mute italic py-6 text-center">No items</td></tr>}
+          {rows.map(r => (
+            <tr key={r.id}>
+              <td className="font-medium">{r.name}</td>
+              <td className="text-mute">{r.unit}</td>
+              <td className="num text-right">{r.opening}</td>
+              <td className="num text-right text-ok">+{r.inQty}</td>
+              <td className="num text-right text-gold">−{r.outQty}</td>
+              <td className="num text-right font-semibold">{r.closing}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function summarizeByGroup(state, asOfDate) {
+  const sums = {};
+  state.groups.forEach(g => sums[g.id] = { group: g, total: 0, ledgers: [] });
+  state.ledgers.forEach(l => {
+    const bal = ledgerBalance(state, l.id, asOfDate);
+    if (!sums[l.groupId]) return;
+    sums[l.groupId].ledgers.push({ ...l, balance: bal });
+    // Asset/expense natural side is Dr — positive when Dr balance.
+    // For BS we want signed totals:
+    const g = sums[l.groupId].group;
+    const naturalDr = g.nature === 'asset' || g.nature === 'expense';
+    const signed = bal.side === 'dr' ? bal.amount : -bal.amount;
+    sums[l.groupId].total += naturalDr ? signed : -signed;
+  });
+  return sums;
+}
+
+function BalanceSheet({ state, asOf }) {
+  const sums = summarizeByGroup(state, asOf);
+
+  // P&L for capital adjustment
+  const incomeGroups = state.groups.filter(g => g.nature === 'income').map(g => g.id);
+  const expenseGroups = state.groups.filter(g => g.nature === 'expense').map(g => g.id);
+  let income = 0, expense = 0;
+  incomeGroups.forEach(gid => income += sums[gid].total);
+  expenseGroups.forEach(gid => expense += sums[gid].total);
+  const profit = income - expense;
+
+  const liabilityGroups = state.groups.filter(g => g.nature === 'liability');
+  const assetGroups = state.groups.filter(g => g.nature === 'asset');
+
+  const totalLiab = liabilityGroups.reduce((s, g) => s + sums[g.id].total, 0) + profit;
+  const totalAsset = assetGroups.reduce((s, g) => s + sums[g.id].total, 0);
+
+  return (
+    <div>
+      <div className="flex justify-between items-baseline mb-3">
+        <h3 className="display text-2xl">Balance Sheet</h3>
+        <span className="text-mute text-sm">as of {fmtDate(asOf)}</span>
+      </div>
+      <div className="grid grid-cols-2 gap-6">
+        <div>
+          <h4 className="smcap text-wax mb-2 border-b border-rule pb-1">Liabilities</h4>
+          {liabilityGroups.map(g => sums[g.id].total !== 0 && (
+            <div key={g.id} className="mb-3">
+              <div className="flex justify-between text-sm font-semibold border-b border-rule pb-1">
+                <span>{g.name}</span><span className="num">₹ {inr(sums[g.id].total)}</span>
+              </div>
+              {sums[g.id].ledgers.map(l => l.balance.amount > 0 && (
+                <div key={l.id} className="flex justify-between text-xs text-mute pl-3 py-0.5">
+                  <span>{l.name}</span><span className="num">₹ {inr(l.balance.side === 'cr' ? l.balance.amount : -l.balance.amount)}</span>
+                </div>
+              ))}
+            </div>
+          ))}
+          {profit !== 0 && (
+            <div className="mb-3">
+              <div className="flex justify-between text-sm font-semibold border-b border-rule pb-1">
+                <span>Profit & Loss A/c {profit >= 0 ? '(Profit)' : '(Loss)'}</span><span className="num">₹ {inr(profit)}</span>
+              </div>
+            </div>
+          )}
+          <div className="flex justify-between border-t-2 border-ink pt-2 mt-3 font-semibold">
+            <span className="display">Total</span><span className="num">₹ {inr(totalLiab)}</span>
+          </div>
+        </div>
+        <div>
+          <h4 className="smcap text-wax mb-2 border-b border-rule pb-1">Assets</h4>
+          {assetGroups.map(g => sums[g.id].total !== 0 && (
+            <div key={g.id} className="mb-3">
+              <div className="flex justify-between text-sm font-semibold border-b border-rule pb-1">
+                <span>{g.name}</span><span className="num">₹ {inr(sums[g.id].total)}</span>
+              </div>
+              {sums[g.id].ledgers.map(l => l.balance.amount > 0 && (
+                <div key={l.id} className="flex justify-between text-xs text-mute pl-3 py-0.5">
+                  <span>{l.name}</span><span className="num">₹ {inr(l.balance.side === 'dr' ? l.balance.amount : -l.balance.amount)}</span>
+                </div>
+              ))}
+            </div>
+          ))}
+          <div className="flex justify-between border-t-2 border-ink pt-2 mt-3 font-semibold">
+            <span className="display">Total</span><span className="num">₹ {inr(totalAsset)}</span>
+          </div>
+        </div>
+      </div>
+      {Math.abs(totalLiab - totalAsset) > 0.01 && (
+        <div className="mt-4 text-xs text-gold italic text-center">
+          Difference: ₹ {inr(totalLiab - totalAsset)} — review opening balances or unposted transactions.
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ProfitLoss({ state, from, to }) {
+  // Sum entries within range by group (for income/expense)
+  const sums = {};
+  state.groups.forEach(g => sums[g.id] = { group: g, total: 0, ledgers: {} });
+  state.ledgerEntries.forEach(e => {
+    if (!inRange(e.date, from, to)) return;
+    const l = state.ledgers.find(x => x.id === e.ledgerId);
+    if (!l) return;
+    const g = state.groups.find(g => g.id === l.groupId);
+    if (!g) return;
+    if (g.nature !== 'income' && g.nature !== 'expense') return;
+    const sums_g = sums[l.groupId];
+    if (!sums_g.ledgers[l.id]) sums_g.ledgers[l.id] = { name: l.name, dr: 0, cr: 0 };
+    sums_g.ledgers[l.id].dr += Number(e.dr) || 0;
+    sums_g.ledgers[l.id].cr += Number(e.cr) || 0;
+    if (g.nature === 'income') sums_g.total += (Number(e.cr) || 0) - (Number(e.dr) || 0);
+    else                       sums_g.total += (Number(e.dr) || 0) - (Number(e.cr) || 0);
+  });
+
+  const incomeGroups = state.groups.filter(g => g.nature === 'income');
+  const expenseGroups = state.groups.filter(g => g.nature === 'expense');
+  const totalInc = incomeGroups.reduce((s, g) => s + sums[g.id].total, 0);
+  const totalExp = expenseGroups.reduce((s, g) => s + sums[g.id].total, 0);
+  const profit = totalInc - totalExp;
+
+  return (
+    <div>
+      <div className="flex justify-between items-baseline mb-3">
+        <h3 className="display text-2xl">Profit & Loss Account</h3>
+        <div className="text-right">
+          <div className="smcap text-mute">Net {profit >= 0 ? 'Profit' : 'Loss'}</div>
+          <div className={`num text-2xl font-semibold ${profit >= 0 ? 'text-ok' : 'text-gold'}`}>₹ {inr(Math.abs(profit))}</div>
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-6">
+        <div>
+          <h4 className="smcap text-wax mb-2 border-b border-rule pb-1">Expenses</h4>
+          {expenseGroups.map(g => sums[g.id].total !== 0 && (
+            <div key={g.id} className="mb-3">
+              <div className="flex justify-between text-sm font-semibold border-b border-rule pb-1">
+                <span>{g.name}</span><span className="num">₹ {inr(sums[g.id].total)}</span>
+              </div>
+              {Object.values(sums[g.id].ledgers).map((l, i) => (
+                <div key={i} className="flex justify-between text-xs text-mute pl-3 py-0.5">
+                  <span>{l.name}</span><span className="num">₹ {inr(l.dr - l.cr)}</span>
+                </div>
+              ))}
+            </div>
+          ))}
+          {profit > 0 && <div className="flex justify-between font-semibold mb-2"><span>Net Profit c/d</span><span className="num">₹ {inr(profit)}</span></div>}
+          <div className="flex justify-between border-t-2 border-ink pt-2 font-semibold">
+            <span className="display">Total</span><span className="num">₹ {inr(totalExp + Math.max(profit, 0))}</span>
+          </div>
+        </div>
+        <div>
+          <h4 className="smcap text-wax mb-2 border-b border-rule pb-1">Incomes</h4>
+          {incomeGroups.map(g => sums[g.id].total !== 0 && (
+            <div key={g.id} className="mb-3">
+              <div className="flex justify-between text-sm font-semibold border-b border-rule pb-1">
+                <span>{g.name}</span><span className="num">₹ {inr(sums[g.id].total)}</span>
+              </div>
+              {Object.values(sums[g.id].ledgers).map((l, i) => (
+                <div key={i} className="flex justify-between text-xs text-mute pl-3 py-0.5">
+                  <span>{l.name}</span><span className="num">₹ {inr(l.cr - l.dr)}</span>
+                </div>
+              ))}
+            </div>
+          ))}
+          {profit < 0 && <div className="flex justify-between font-semibold mb-2"><span>Net Loss c/d</span><span className="num">₹ {inr(-profit)}</span></div>}
+          <div className="flex justify-between border-t-2 border-ink pt-2 font-semibold">
+            <span className="display">Total</span><span className="num">₹ {inr(totalInc + Math.max(-profit, 0))}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function CashFlow({ state, from, to }) {
+  const cashLedgers = state.ledgers.filter(l =>
+    l.groupId === 'g_cash' || l.groupId === 'g_bank' || l.groupId === 'g_bank_od'
+  );
+  const cashLedgerIds = cashLedgers.map(l => l.id);
+  const flows = [];
+  state.ledgerEntries.forEach(e => {
+    if (!inRange(e.date, from, to)) return;
+    if (!cashLedgerIds.includes(e.ledgerId)) return;
+    flows.push(e);
+  });
+  flows.sort((a, b) => a.date.localeCompare(b.date));
+  let opening = 0;
+  cashLedgers.forEach(l => {
+    let b = Number(l.openingBalance) || 0;
+    state.ledgerEntries.forEach(e => {
+      if (e.ledgerId !== l.id) return;
+      if (e.date < from) b += (Number(e.dr) || 0) - (Number(e.cr) || 0);
+    });
+    opening += b;
+  });
+  const inflow = flows.reduce((s, e) => s + (Number(e.dr) || 0), 0);
+  const outflow = flows.reduce((s, e) => s + (Number(e.cr) || 0), 0);
+  const closing = opening + inflow - outflow;
+
+  return (
+    <div>
+      <h3 className="display text-2xl mb-3">Cash Flow Statement</h3>
+      <div className="grid grid-cols-4 gap-3 mb-5">
+        <div className="bg-paper2/50 border border-rule p-3 rounded-sm"><div className="smcap text-mute">Opening</div><div className="num text-lg">₹ {inr(opening)}</div></div>
+        <div className="bg-paper2/50 border border-rule p-3 rounded-sm"><div className="smcap text-mute">Inflow</div><div className="num text-lg text-ok">+₹ {inr(inflow)}</div></div>
+        <div className="bg-paper2/50 border border-rule p-3 rounded-sm"><div className="smcap text-mute">Outflow</div><div className="num text-lg text-gold">−₹ {inr(outflow)}</div></div>
+        <div className="bg-paper2/50 border border-rule p-3 rounded-sm"><div className="smcap text-mute">Closing</div><div className="num text-lg font-semibold">₹ {inr(closing)}</div></div>
+      </div>
+      <table className="ledger">
+        <thead><tr><th>Date</th><th>Account</th><th>Narration</th><th style={{textAlign:'right'}}>Inflow</th><th style={{textAlign:'right'}}>Outflow</th></tr></thead>
+        <tbody>
+          {flows.length === 0 && <tr><td colSpan="5" className="text-mute italic py-6 text-center">No cash movements</td></tr>}
+          {flows.map(e => {
+            const l = state.ledgers.find(x => x.id === e.ledgerId);
+            return (
+              <tr key={e.id}>
+                <td className="num text-mute">{fmtDate(e.date)}</td>
+                <td>{l?.name}</td>
+                <td className="text-sm text-ink2">{e.narration}</td>
+                <td className="num text-right text-ok">{e.dr ? '+₹ ' + inr(e.dr) : ''}</td>
+                <td className="num text-right text-gold">{e.cr ? '−₹ ' + inr(e.cr) : ''}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// HOT KEYS SIDEBAR
+// ──────────────────────────────────────────────────────────────────────────
+
+function HotKeysSidebar({ active, onSwitch }) {
+  return (
+    <aside className="bg-paper2/40 border-l border-rule2 px-4 py-5 w-[200px] no-print">
+      <div className="flex items-center justify-between border-b border-rule2 pb-3 mb-3">
+        <span className="smcap text-mute">Hot Keys</span>
+        <span className="text-[10px] text-mute italic">F1—F7</span>
+      </div>
+      <div className="space-y-1">
+        {SCREEN_LIST.map(key => {
+          const s = SCREENS[key];
+          const isActive = active === key;
+          return (
+            <button key={key} onClick={() => onSwitch(key)}
+                    className={`w-full text-left flex items-center justify-between px-3 py-2 rounded-sm transition-all ${isActive ? 'bg-ink text-paper' : 'hover:bg-paper hover:border-rule border border-transparent'}`}>
+              <span className="text-sm font-medium">{s.label}</span>
+              <span className={isActive ? 'keypaper' : 'key'}>{s.hot}</span>
+            </button>
+          );
+        })}
+      </div>
+    </aside>
+  );
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// AUTH GATE — Login screen (email/password)
+// ──────────────────────────────────────────────────────────────────────────
+
+function LoginScreen({ onError }) {
+  const [email, setEmail] = useState('');
+  const [pwd, setPwd] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+
+  const submit = async (e) => {
+    e && e.preventDefault();
+    if (!email.trim() || !pwd) { setErr('Enter email and password'); return; }
+    if (!cloudReady()) { setErr('Cloud connection unavailable. Check internet.'); return; }
+    setErr(''); setBusy(true);
+    try {
+      await fbAuth().signInWithEmailAndPassword(email.trim(), pwd);
+      // onAuthStateChanged in App takes over
+    } catch (e2) {
+      const code = (e2 && e2.code) || '';
+      let msg = 'Sign in failed';
+      if (code === 'auth/invalid-email')              msg = 'Invalid email format';
+      else if (code === 'auth/user-not-found')        msg = 'No such user';
+      else if (code === 'auth/wrong-password' ||
+               code === 'auth/invalid-credential' ||
+               code === 'auth/invalid-login-credentials') msg = 'Wrong email or password';
+      else if (code === 'auth/too-many-requests')     msg = 'Too many attempts — wait a minute';
+      else if (code === 'auth/network-request-failed') msg = 'No internet';
+      setErr(msg);
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="min-h-screen flex items-center justify-center px-4">
+      <div className="bg-paper border border-rule rounded-sm shadow-sm w-full max-w-sm p-8"
+           style={{ boxShadow: '0 1px 0 rgba(255,253,247,0.6) inset, 0 8px 24px rgba(15,74,89,0.10)' }}>
+        <div className="flex flex-col items-center mb-6">
+          <img src={BRAND_LOGO_DATA_URL} alt={BUSINESS_NAME} className="brand-logo-lg mb-3" />
+          <div className="text-xs text-mute italic mt-1">v2.2</div>
+        </div>
+        <form onSubmit={submit} className="space-y-3">
+          <div>
+            <label className="smcap text-mute block mb-1">Email</label>
+            <input
+              type="email" autoFocus autoComplete="username" className="w-full"
+              value={email} onChange={(e) => setEmail(e.target.value)}
+              disabled={busy}
+            />
+          </div>
+          <div>
+            <label className="smcap text-mute block mb-1">Password</label>
+            <input
+              type="password" autoComplete="current-password" className="w-full"
+              value={pwd} onChange={(e) => setPwd(e.target.value)}
+              disabled={busy}
+            />
+          </div>
+          {err && <div className="text-xs text-gold italic">{err}</div>}
+          <button type="submit" className="btn btn-primary w-full mt-2" disabled={busy}>
+            {busy ? 'Signing in…' : 'Sign In'}
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// SYNC STATUS PILL (footer indicator)
+// ──────────────────────────────────────────────────────────────────────────
+
+function SyncStatusPill({ status, lastSyncAt }) {
+  const map = {
+    idle:    { color: '#2e8b2e', label: 'synced' },        // logo green
+    syncing: { color: '#1b6e84', label: 'syncing…' },      // logo teal
+    offline: { color: '#7a7464', label: 'offline (cached)' },
+    error:   { color: '#c8252c', label: 'sync error' },    // logo red
+    local:   { color: '#7a7464', label: 'local only' },
+  };
+  const s = map[status] || map.idle;
+  const ago = lastSyncAt ? `· ${Math.max(0, Math.round((Date.now() - lastSyncAt)/1000))}s ago` : '';
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      <span style={{ width: 8, height: 8, borderRadius: 999, background: s.color, display: 'inline-block' }}></span>
+      <span style={{ color: s.color }}>{s.label}</span>
+      {status === 'idle' && lastSyncAt && <span className="text-mute">{ago}</span>}
+    </span>
+  );
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// BACKUPS MODAL — daily snapshot history (Tier 3 viewer)
+// ──────────────────────────────────────────────────────────────────────────
+
+function BackupsModal({ open, onClose, onRestore, onView, toast }) {
+  const [snaps, setSnaps] = useState(loadSnapshots());
+
+  useEffect(() => { if (open) setSnaps(loadSnapshots()); }, [open]);
+
+  const refresh = () => setSnaps(loadSnapshots());
+
+  const handlePin = (date, pinned) => { pinSnapshot(date, pinned); refresh(); };
+  const handleDelete = (date) => {
+    if (!confirm(`Delete snapshot from ${fmtDate(date)}?`)) return;
+    deleteSnapshot(date); refresh(); toast('Snapshot deleted');
+  };
+  const handleDownload = (snap) => {
+    try {
+      const blob = new Blob([snap.payload], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = `bikecare-erp-${snap.date}.json`;
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (e) { toast('Download failed'); }
+  };
+  const handleView = (snap) => {
+    try { onView(JSON.parse(snap.payload), snap.date); }
+    catch (e) { toast('Snapshot corrupted'); }
+  };
+  const handleRestore = (snap) => {
+    if (!confirm(`Restore the books to their state on ${fmtDate(snap.date)}?\n\nThis will overwrite current data on this device AND in the cloud. (Today's snapshot is taken automatically before this happens.)`)) return;
+    if (!confirm('Really restore? Last chance to cancel.')) return;
+    try {
+      const data = JSON.parse(snap.payload);
+      onRestore(normalizeState(data));
+      toast(`Restored to ${fmtDate(snap.date)}`);
+      onClose();
+    } catch (e) { toast('Restore failed — snapshot corrupted'); }
+  };
+
+  return (
+    <Modal open={open} onClose={onClose} title="Daily Snapshots — In-app history"
+           footer={<button onClick={onClose} className="btn btn-ghost">Close</button>}>
+      {snaps.length === 0 ? (
+        <p className="text-mute italic text-sm py-6 text-center">
+          No snapshots yet. One is taken automatically each day on the first save.
+        </p>
+      ) : (
+        <>
+          <table className="ledger">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th style={{textAlign:'right'}}>Vouchers</th>
+                <th style={{textAlign:'right'}}>Sales</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {snaps.map(s => (
+                <tr key={s.date}>
+                  <td>
+                    <span className="num">{fmtDate(s.date)}</span>
+                    {s.pinned && <span className="chip ml-2" title="Pinned"
+                      style={{ background: 'rgba(160,122,42,0.18)', color: '#7a5a1a' }}>★ pinned</span>}
+                  </td>
+                  <td className="num text-right">{s.voucherCount}</td>
+                  <td className="num text-right">₹ {inr(s.totalSales)}</td>
+                  <td className="text-right whitespace-nowrap">
+                    <button className="btn btn-ghost text-[10px] px-2 py-0.5 mr-1" onClick={() => handleView(s)}>View</button>
+                    <button className="btn btn-ghost text-[10px] px-2 py-0.5 mr-1" onClick={() => handleDownload(s)}>⬇</button>
+                    <button className="btn btn-ghost text-[10px] px-2 py-0.5 mr-1" onClick={() => handlePin(s.date, !s.pinned)}>{s.pinned ? '☆' : '★'}</button>
+                    <button className="btn btn-ghost text-[10px] px-2 py-0.5 mr-1" onClick={() => handleRestore(s)}>Restore</button>
+                    <button className="btn btn-danger text-[10px] px-2 py-0.5" onClick={() => handleDelete(s.date)}>×</button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </>
+      )}
+    </Modal>
+  );
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// SNAPSHOT VIEWER — read-only window into a past day's books
+// ──────────────────────────────────────────────────────────────────────────
+
+function SnapshotViewer({ snapshot, snapshotDate, onClose }) {
+  const [scr, setScr] = useState('REPORTS');
+  if (!snapshot) return null;
+  return (
+    <div className="modal-bg" onClick={(e) => { if (e.target.className === 'modal-bg') onClose(); }}>
+      <div className="modal-card" style={{ maxWidth: '1200px', height: '90vh', display: 'flex', flexDirection: 'column' }}>
+        <div className="border-b border-rule2 px-5 py-3 flex items-center justify-between" style={{ background: 'rgba(160,122,42,0.10)' }}>
+          <div className="flex items-center gap-3">
+            <span className="chip" style={{ background: 'rgba(160,122,42,0.25)', color: '#7a5a1a', fontWeight: 600 }}>
+              READ-ONLY · SNAPSHOT
+            </span>
+            <span className="display text-lg">Books as on {fmtDate(snapshotDate)}</span>
+          </div>
+          <div className="flex items-center gap-2">
+            {['REPORTS','MASTERS'].map(k => (
+              <button key={k} onClick={() => setScr(k)}
+                      className={`btn ${scr === k ? 'btn-primary' : 'btn-ghost'} text-xs`}>
+                {k === 'REPORTS' ? 'Reports' : 'Masters'}
+              </button>
+            ))}
+            <button onClick={onClose} className="btn btn-ghost text-xs">Close ✕</button>
+          </div>
+        </div>
+        <div className="flex-1 overflow-auto px-6 py-5">
+          {scr === 'REPORTS' && <ReportsScreen state={snapshot} />}
+          {scr === 'MASTERS' && <MastersScreen state={snapshot} setState={() => {}} toast={() => {}} />}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// APP SHELL
+// ──────────────────────────────────────────────────────────────────────────
+
+function App() {
+  const [state, setStateRaw] = useState(loadStateLocal);
+  const [screen, setScreen] = useState('SALES');
+  const [toastMsg, setToastMsg] = useState('');
+  const [receiptPrefill, setReceiptPrefill] = useState(null);
+  const [showSettings, setShowSettings] = useState(false);
+  const [showBackups, setShowBackups] = useState(false);
+  const [viewingSnap, setViewingSnap] = useState(null); // { snapshot, date }
+
+  // Auth: 'loading' | 'login' | 'ready' | 'local-fallback'
+  const [authPhase, setAuthPhase] = useState(() => cloudReady() ? 'loading' : 'local-fallback');
+  const [user, setUser] = useState(null);
+
+  // Sync: 'idle' | 'syncing' | 'offline' | 'error' | 'local'
+  const [syncStatus, setSyncStatus] = useState(cloudReady() ? 'syncing' : 'local');
+  const [lastSyncAt, setLastSyncAt] = useState(0);
+  const [autoDownload, setAutoDownload] = useState(() => localStorage.getItem(AUTO_DL_PREF_KEY) === '1');
+
+  const debounceRef = useRef(null);
+  const lastWrittenPayloadRef = useRef(null);  // Last payload we wrote to Firestore
+  const lastReceivedPayloadRef = useRef(null); // Last payload received from listener
+  const initializedRef = useRef(false);
+
+  const toast = useCallback((m) => setToastMsg(m), []);
+
+  // ── Auth listener ────────────────────────────────────────────────────────
+  useEffect(() => {
+    if (!cloudReady()) return;
+    const unsub = fbAuth().onAuthStateChanged((u) => {
+      setUser(u);
+      setAuthPhase(u ? 'ready' : 'login');
+    }, (err) => {
+      console.error('Auth listener error:', err);
+      setAuthPhase('local-fallback');
+    });
+    return unsub;
+  }, []);
+
+  // ── Firestore real-time subscription ─────────────────────────────────────
+  useEffect(() => {
+    if (!cloudReady() || !user) return;
+    const ref = fbDB().doc(FIRESTORE_DOC_PATH);
+
+    const unsub = ref.onSnapshot(
+      (snap) => {
+        const fromCache = snap.metadata && snap.metadata.fromCache;
+        if (snap.exists) {
+          const data = snap.data();
+          const payload = data && data.payload;
+          if (payload) {
+            // Skip if it's our own write echoing back
+            if (lastWrittenPayloadRef.current === payload) {
+              setSyncStatus(fromCache ? 'offline' : 'idle');
+              setLastSyncAt(Date.now());
+              initializedRef.current = true;
+              return;
+            }
+            // Skip if identical to what we already have
+            if (lastReceivedPayloadRef.current === payload) {
+              setSyncStatus(fromCache ? 'offline' : 'idle');
+              return;
+            }
+            try {
+              const remote = normalizeState(JSON.parse(payload));
+              lastReceivedPayloadRef.current = payload;
+              setStateRaw(remote);
+              saveStateLocal(remote);
+              captureSnapshotIfNeeded(remote);
+              if (!initializedRef.current) {
+                triggerDailyAutoDownload(remote);
+                initializedRef.current = true;
+              }
+            } catch (e) {
+              console.error('Failed to parse Firestore payload', e);
+            }
+          }
+        } else {
+          // First time — push current local state to seed Firestore
+          if (!initializedRef.current) {
+            const seed = JSON.stringify(state);
+            ref.set({
+              payload: seed,
+              updatedAt: fbNS().firestore.FieldValue.serverTimestamp(),
+              updatedBy: user.email || 'unknown',
+              version: 1,
+            }).then(() => {
+              lastWrittenPayloadRef.current = seed;
+              initializedRef.current = true;
+            }).catch(err => console.error('Seed write failed:', err));
+          }
+        }
+        setSyncStatus(fromCache ? 'offline' : 'idle');
+        setLastSyncAt(Date.now());
+      },
+      (err) => {
+        console.error('Firestore listen error:', err);
+        setSyncStatus('error');
+      }
+    );
+    return unsub;
+  }, [user]); // eslint-disable-line
+
+  // ── setState — write-through to local + (debounced) Firestore ────────────
+  const setState = useCallback((s) => {
+    setStateRaw(prev => {
+      const next = typeof s === 'function' ? s(prev) : s;
+      // Mirror to localStorage immediately (instant cache, offline survival)
+      saveStateLocal(next);
+      // Capture daily snapshot if it's a new day
+      captureSnapshotIfNeeded(next);
+
+      if (cloudReady() && user) {
+        setSyncStatus('syncing');
+        if (debounceRef.current) clearTimeout(debounceRef.current);
+        debounceRef.current = setTimeout(() => {
+          const payload = JSON.stringify(next);
+          // Avoid no-op writes
+          if (lastWrittenPayloadRef.current === payload) {
+            setSyncStatus('idle');
+            return;
+          }
+          fbDB().doc(FIRESTORE_DOC_PATH).set({
+            payload,
+            updatedAt: fbNS().firestore.FieldValue.serverTimestamp(),
+            updatedBy: (user && user.email) || 'unknown',
+            version: 1,
+          }).then(() => {
+            lastWrittenPayloadRef.current = payload;
+            setSyncStatus('idle');
+            setLastSyncAt(Date.now());
+          }).catch(err => {
+            console.error('Firestore write failed:', err);
+            setSyncStatus('error');
+          });
+        }, 500);
+      }
+      return next;
+    });
+  }, [user]);
+
+  // ── F-key navigation, global ─────────────────────────────────────────────
+  useEffect(() => {
+    const onKey = (e) => {
+      const fkeys = { 'F1': 'PURCHASES', 'F2': 'SALES', 'F3': 'PAYMENT', 'F4': 'RECEIPT', 'F5': 'JOURNAL', 'F6': 'REPORTS', 'F7': 'MASTERS' };
+      if (fkeys[e.key]) {
+        e.preventDefault();
+        if (authPhase === 'login' || authPhase === 'loading') return;
+        if (viewingSnap) return;
+        setScreen(fkeys[e.key]);
+        if (fkeys[e.key] !== 'RECEIPT') setReceiptPrefill(null);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [authPhase, viewingSnap]);
+
+  const switchScreen = (key) => {
+    setScreen(key);
+    if (key !== 'RECEIPT') setReceiptPrefill(null);
+  };
+
+  const gotoReceipt = (salesVoucher) => {
+    setReceiptPrefill(salesVoucher);
+    setScreen('RECEIPT');
+  };
+
+  const exportData = () => {
+    const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = `bikecare-erp-${todayISO()}.json`;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    toast('Exported');
+  };
+
+  // ── Excel export — multi-sheet workbook (humans only, not re-importable) ──
+  const exportExcel = () => {
+    if (typeof XLSX === 'undefined') { toast('Excel library not loaded — check internet and reload'); return; }
+    try {
+      const wb = XLSX.utils.book_new();
+      const groupName = (gid) => state.groups.find(g => g.id === gid)?.name || '';
+      const ledgerName = (lid) => state.ledgers.find(l => l.id === lid)?.name || '';
+      const itemName = (iid) => state.items.find(i => i.id === iid)?.name || '';
+
+      // 1) Vouchers
+      const voucherRows = state.vouchers.map(v => ({
+        'Date': fmtDate(v.date),
+        'Type': v.type,
+        'Voucher #': v.voucherNo,
+        'Party': v.partyName || '',
+        'Address': v.address || '',
+        'Contact': v.contact || '',
+        'Vehicle': v.vehicle || '',
+        'Subtotal': Number(v.total) || 0,
+        'Other Charges': Number(v.charges) || 0,
+        'Grand Total': Number(v.grand) || 0,
+        'Narration': v.narration || '',
+      }));
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(voucherRows), 'Vouchers');
+
+      // 2) Voucher Lines (one row per item line across all vouchers)
+      const lineRows = [];
+      state.vouchers.forEach(v => {
+        (v.lines || []).forEach(l => {
+          const item = state.items.find(i => i.id === l.itemId);
+          const unit = item ? state.units.find(u => u.id === item.unitId) : null;
+          lineRows.push({
+            'Date': fmtDate(v.date),
+            'Type': v.type,
+            'Voucher #': v.voucherNo,
+            'Party': v.partyName || '',
+            'Item': item?.name || '',
+            'Qty': Number(l.qty) || 0,
+            'Unit': unit?.name || '',
+            'Rate': Number(l.rate) || 0,
+            'Line Total': (Number(l.qty) || 0) * (Number(l.rate) || 0),
+          });
+        });
+      });
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(lineRows), 'Voucher Lines');
+
+      // 3) Ledgers with current balance
+      const ledgerRows = state.ledgers.map(l => {
+        const bal = ledgerBalance(state, l.id);
+        return {
+          'Ledger': l.name,
+          'Group': groupName(l.groupId),
+          'Opening Balance': Number(l.openingBalance) || 0,
+          'Current Balance': bal.amount,
+          'Side': bal.amount > 0 ? bal.side.toUpperCase() : '',
+          'Contact': l.contact || '',
+          'Address': l.address || '',
+        };
+      });
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(ledgerRows), 'Ledgers');
+
+      // 4) Items with stock
+      const itemRows = state.items.map(it => {
+        const unit = state.units.find(u => u.id === it.unitId);
+        const sup = state.superCategories.find(s => s.id === it.superCategoryId);
+        const sub = state.subCategories.find(s => s.id === it.subCategoryId);
+        return {
+          'Item': it.name,
+          'Unit': unit?.name || '',
+          'Super Category': sup?.name || '',
+          'Sub Category': sub?.name || '',
+          'Opening Stock': Number(it.openingBalance) || 0,
+          'Current Stock': stockBalance(state, it.id),
+          'Last Sale Price': Number(it.lastSalePrice) || 0,
+          'Last Purchase Price': Number(it.lastPurchasePrice) || 0,
+        };
+      });
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(itemRows), 'Items');
+
+      // 5) Stock Entries
+      const stockRows = state.stockEntries.map(e => ({
+        'Date': fmtDate(e.date),
+        'Item': itemName(e.itemId),
+        'In': Number(e.in) || 0,
+        'Out': Number(e.out) || 0,
+        'Rate': Number(e.rate) || 0,
+      }));
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(stockRows), 'Stock Entries');
+
+      // 6) Ledger Entries (the double-entry record)
+      const entryRows = state.ledgerEntries.map(e => ({
+        'Date': fmtDate(e.date),
+        'Ledger': ledgerName(e.ledgerId),
+        'Dr': Number(e.dr) || 0,
+        'Cr': Number(e.cr) || 0,
+        'Narration': e.narration || '',
+      }));
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(entryRows), 'Ledger Entries');
+
+      // 7) Summary cover sheet
+      const totalSales = state.vouchers.filter(v => v.type === 'sales').reduce((s, v) => s + (Number(v.grand) || 0), 0);
+      const totalPurch = state.vouchers.filter(v => v.type === 'purchase').reduce((s, v) => s + (Number(v.grand) || 0), 0);
+      const summary = [
+        { Field: 'Business', Value: state.meta.businessName },
+        { Field: 'Exported on', Value: fmtDate(todayISO()) + ' (IST)' },
+        { Field: 'FY Start', Value: fmtDate(state.meta.fyStart) },
+        { Field: '', Value: '' },
+        { Field: 'Total Vouchers', Value: state.vouchers.length },
+        { Field: 'Total Sales (₹)', Value: totalSales },
+        { Field: 'Total Purchases (₹)', Value: totalPurch },
+        { Field: 'Ledgers', Value: state.ledgers.length },
+        { Field: 'Items', Value: state.items.length },
+      ];
+      const summarySheet = XLSX.utils.json_to_sheet(summary);
+      XLSX.utils.book_append_sheet(wb, summarySheet, 'Summary');
+
+      XLSX.writeFile(wb, `bikecare-erp-${todayISO()}.xlsx`);
+      toast('Excel exported');
+    } catch (e) {
+      console.error('Excel export failed', e);
+      toast('Excel export failed');
+    }
+  };
+
+  // ── PDF export — printable summary report (humans only, not re-importable) ──
+  const exportPDF = () => {
+    const jsPDFCtor = (window.jspdf && window.jspdf.jsPDF) || window.jsPDF;
+    if (!jsPDFCtor) { toast('PDF library not loaded — check internet and reload'); return; }
+    try {
+      const doc = new jsPDFCtor({ unit: 'pt', format: 'a4' });
+      const W = doc.internal.pageSize.getWidth();
+      let y = 36;
+
+      // Header
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(20); doc.setTextColor(27, 110, 132);
+      doc.text(state.meta.businessName || BUSINESS_NAME, 36, y);
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.setTextColor(100);
+      y += 18;
+      doc.text(`Books export · ${fmtDateLong(todayISO())}`, 36, y);
+      y += 6;
+      doc.setDrawColor(27, 110, 132); doc.setLineWidth(2);
+      doc.line(36, y, W - 36, y);
+      y += 16;
+
+      // Summary block
+      const totalSales = state.vouchers.filter(v => v.type === 'sales').reduce((s, v) => s + (Number(v.grand) || 0), 0);
+      const totalPurch = state.vouchers.filter(v => v.type === 'purchase').reduce((s, v) => s + (Number(v.grand) || 0), 0);
+
+      doc.setTextColor(30); doc.setFont('helvetica', 'bold'); doc.setFontSize(12);
+      doc.text('Summary', 36, y); y += 6;
+      doc.autoTable({
+        startY: y,
+        theme: 'plain',
+        styles: { font: 'helvetica', fontSize: 10, cellPadding: 4 },
+        body: [
+          ['FY Start',          fmtDate(state.meta.fyStart) || '—'],
+          ['Total Vouchers',    String(state.vouchers.length)],
+          ['Total Sales (Rs.)', inr(totalSales)],
+          ['Total Purchases (Rs.)', inr(totalPurch)],
+          ['Ledgers',           String(state.ledgers.length)],
+          ['Items',             String(state.items.length)],
+        ],
+      });
+      y = doc.lastAutoTable.finalY + 18;
+
+      // Recent vouchers (last 30)
+      const recentVouchers = [...state.vouchers].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 30);
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(12);
+      doc.text('Recent Vouchers (most recent 30)', 36, y); y += 4;
+      doc.autoTable({
+        startY: y + 4,
+        head: [['Date', 'Type', '#', 'Party', 'Amount (Rs.)']],
+        body: recentVouchers.map(v => [
+          fmtDate(v.date),
+          v.type,
+          String(v.voucherNo),
+          (v.partyName || '').slice(0, 32),
+          inr(v.grand || 0),
+        ]),
+        styles:    { font: 'helvetica', fontSize: 9, cellPadding: 4 },
+        headStyles:{ fillColor: [27, 110, 132], textColor: 245, halign: 'left' },
+        columnStyles: { 4: { halign: 'right' } },
+      });
+      y = doc.lastAutoTable.finalY + 18;
+
+      // Stock summary
+      const stockRows = state.items
+        .map(it => {
+          const unit = state.units.find(u => u.id === it.unitId);
+          return [it.name, unit?.name || '', String(stockBalance(state, it.id))];
+        })
+        .sort((a, b) => Number(b[2]) - Number(a[2]));
+      if (stockRows.length > 0) {
+        doc.setFont('helvetica', 'bold'); doc.setFontSize(12);
+        doc.text('Stock Summary', 36, y); y += 4;
+        doc.autoTable({
+          startY: y + 4,
+          head: [['Item', 'Unit', 'Stock']],
+          body: stockRows,
+          styles:    { font: 'helvetica', fontSize: 9, cellPadding: 4 },
+          headStyles:{ fillColor: [27, 110, 132], textColor: 245, halign: 'left' },
+          columnStyles: { 2: { halign: 'right' } },
+        });
+        y = doc.lastAutoTable.finalY + 18;
+      }
+
+      // Ledger balances grouped by group
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(12);
+      doc.text('Ledger Balances', 36, y); y += 4;
+      const ledgerByGroup = state.groups
+        .map(g => {
+          const rows = state.ledgers
+            .filter(l => l.groupId === g.id)
+            .map(l => {
+              const b = ledgerBalance(state, l.id);
+              return [l.name, b.amount > 0 ? `Rs. ${inr(b.amount)} ${b.side.toUpperCase()}` : '—'];
+            });
+          return { group: g, rows };
+        })
+        .filter(x => x.rows.length > 0);
+
+      const balBody = [];
+      ledgerByGroup.forEach(({ group, rows }) => {
+        balBody.push([{ content: group.name, colSpan: 2, styles: { fillColor: [237, 229, 210], fontStyle: 'bold' } }]);
+        rows.forEach(r => balBody.push(r));
+      });
+      doc.autoTable({
+        startY: y + 4,
+        head: [['Ledger', 'Balance']],
+        body: balBody,
+        styles:    { font: 'helvetica', fontSize: 9, cellPadding: 4 },
+        headStyles:{ fillColor: [27, 110, 132], textColor: 245, halign: 'left' },
+        columnStyles: { 1: { halign: 'right' } },
+      });
+
+      // Footer with page numbers
+      const pageCount = doc.internal.getNumberOfPages();
+      for (let i = 1; i <= pageCount; i++) {
+        doc.setPage(i);
+        doc.setFont('helvetica', 'italic'); doc.setFontSize(8); doc.setTextColor(120);
+        doc.text(`${state.meta.businessName} · Bike Care ERP V2.2 · page ${i} of ${pageCount}`, W / 2, doc.internal.pageSize.getHeight() - 18, { align: 'center' });
+      }
+
+      doc.save(`bikecare-erp-${todayISO()}.pdf`);
+      toast('PDF exported');
+    } catch (e) {
+      console.error('PDF export failed', e);
+      toast('PDF export failed');
+    }
+  };
+
+  const importData = (file) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const data = normalizeState(JSON.parse(reader.result));
+        setState(data);
+        toast('Data imported');
+      } catch (e) { toast('Invalid file'); }
+    };
+    reader.readAsText(file);
+  };
+
+  const wipeAll = () => {
+    if (!confirm('This will erase ALL data — local AND in the cloud. Are you sure?')) return;
+    if (!confirm('Really erase everything? This cannot be undone.')) return;
+    const fresh = initialState();
+    localStorage.removeItem(STORAGE_KEY);
+    setStateRaw(fresh);
+    saveStateLocal(fresh);
+    if (cloudReady() && user) {
+      const payload = JSON.stringify(fresh);
+      fbDB().doc(FIRESTORE_DOC_PATH).set({
+        payload,
+        updatedAt: fbNS().firestore.FieldValue.serverTimestamp(),
+        updatedBy: (user && user.email) || 'unknown',
+        version: 1,
+      }).then(() => { lastWrittenPayloadRef.current = payload; }).catch(console.error);
+    }
+    toast('All data erased');
+  };
+
+  const restoreFromSnapshot = (snapState) => {
+    setState(snapState);
+  };
+
+  const handleAutoDownloadToggle = (e) => {
+    const on = e.target.checked;
+    setAutoDownload(on);
+    localStorage.setItem(AUTO_DL_PREF_KEY, on ? '1' : '0');
+    if (on) toast('Daily auto-download enabled — first download tomorrow');
+  };
+
+  const handleSignOut = async () => {
+    if (!confirm('Sign out of Bike Care on this device?')) return;
+    try {
+      await fbAuth().signOut();
+      // localStorage stays so re-sign-in is instant
+      setShowSettings(false);
+      toast('Signed out');
+    } catch (e) { toast('Sign out failed'); }
+  };
+
+  // ── Render: auth gate ────────────────────────────────────────────────────
+  if (authPhase === 'loading') {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <img src={BRAND_LOGO_DATA_URL} alt={BUSINESS_NAME} className="brand-logo-lg mx-auto mb-4" />
+          <div className="smcap text-mute mt-1">Connecting to cloud…</div>
+        </div>
+      </div>
+    );
+  }
+  if (authPhase === 'login') {
+    return <LoginScreen />;
+  }
+  // 'ready' or 'local-fallback' — render the app
+
+  // ── Render: main app ─────────────────────────────────────────────────────
+  return (
+    <div className="min-h-screen flex flex-col">
+      {/* Top Chrome — logo + business name + date */}
+      <header className="bg-paper border-b border-rule2 px-6 pt-3 pb-0 no-print">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <img src={BRAND_LOGO_DATA_URL} alt={state.meta.businessName} className="brand-logo" />
+            <div>
+              <h1 className="display text-xl leading-none">{state.meta.businessName}</h1>
+              <div className="text-xs text-mute italic mt-1 num">{fmtDateLong(todayISO())}</div>
+            </div>
+          </div>
+          <div className="flex items-center gap-5">
+            <button onClick={() => setShowSettings(true)} className="btn btn-ghost text-xs">Data ⚙</button>
+          </div>
+        </div>
+        <div className="brand-rule mt-3"></div>
+      </header>
+
+      {/* Main */}
+      <div className="flex flex-1 min-h-0">
+        <main className="flex-1 px-8 py-6 overflow-auto">
+          {screen === 'PURCHASES' && <PurchasesScreen state={state} setState={setState} toast={toast} />}
+          {screen === 'SALES'     && <SalesScreen     state={state} setState={setState} toast={toast} gotoReceipt={gotoReceipt} />}
+          {screen === 'PAYMENT'   && <PaymentReceiptScreen state={state} setState={setState} toast={toast} mode="PAYMENT" />}
+          {screen === 'RECEIPT'   && <PaymentReceiptScreen state={state} setState={setState} toast={toast} mode="RECEIPT" prefill={receiptPrefill} />}
+          {screen === 'JOURNAL'   && <JournalScreen   state={state} setState={setState} toast={toast} />}
+          {screen === 'REPORTS'   && <ReportsScreen   state={state} />}
+          {screen === 'MASTERS'   && <MastersScreen   state={state} setState={setState} toast={toast} />}
+        </main>
+
+        <HotKeysSidebar active={screen} onSwitch={switchScreen} />
+      </div>
+
+      {/* Footer */}
+      <footer className="border-t border-rule2 bg-paper2/30 px-6 py-2 flex justify-between items-center text-xs text-mute no-print">
+        <div className="flex items-center gap-3">
+          <span className="key">F1</span><span>Purchases</span>
+          <span className="key">F2</span><span>Sales</span>
+          <span className="key">F3</span><span>Payment</span>
+          <span className="key">F4</span><span>Receipt</span>
+          <span className="key">F5</span><span>Journal</span>
+          <span className="key">F6</span><span>Reports</span>
+          <span className="key">F7</span><span>Masters</span>
+        </div>
+        <div className="flex items-center gap-3">
+          <span>{state.vouchers.length} vouchers · {state.ledgers.length} ledgers · {state.items.length} items</span>
+          <span className="text-rule2">·</span>
+          <SyncStatusPill status={syncStatus} lastSyncAt={lastSyncAt} />
+          <span className="text-rule2">·</span>
+          <span className="italic text-[10px]">v2.2</span>
+        </div>
+      </footer>
+
+      {/* Settings */}
+      <Modal open={showSettings} onClose={() => setShowSettings(false)} title="Data & Settings"
+             footer={<button onClick={() => setShowSettings(false)} className="btn btn-ghost">Done</button>}>
+        <div className="space-y-5">
+          {/* Account */}
+          {cloudReady() && user && (
+            <div>
+              <div className="smcap text-mute mb-2">Account</div>
+              <div className="flex items-center justify-between text-sm">
+                <div>
+                  <div className="font-medium">{user.email}</div>
+                </div>
+                <button onClick={handleSignOut} className="btn btn-ghost text-xs">Sign Out</button>
+              </div>
+            </div>
+          )}
+          {!cloudReady() && (
+            <div className="bg-paper2/50 border border-rule2 rounded p-3 text-xs text-mute">
+              <div className="font-semibold text-ink mb-1">⚠ Cloud sync unavailable</div>
+              Firebase didn't load — likely a network or CDN issue. The app is running on local storage only. Reload when you're back online.
+            </div>
+          )}
+
+          <div className="border-t border-rule pt-4">
+            <div className="smcap text-mute mb-2">Business</div>
+            <div className="space-y-3">
+              <div>
+                <label className="smcap text-mute block mb-1">Business Name</label>
+                <div className="px-2 py-1.5 bg-paper2/60 border border-rule rounded-sm text-sm font-medium">
+                  <span>{state.meta.businessName}</span>
+                </div>
+              </div>
+              <div>
+                <label className="smcap text-mute block mb-1">FY Start</label>
+                <input type="date" className="w-full" value={state.meta.fyStart} onChange={(e) => setState({ ...state, meta: { ...state.meta, fyStart: e.target.value } })} />
+              </div>
+            </div>
+          </div>
+
+          <div className="border-t border-rule pt-4">
+            <div className="smcap text-mute mb-2">Backup & Restore</div>
+            <div className="flex gap-2 flex-wrap">
+              <button onClick={() => setShowBackups(true)} className="btn btn-ghost">📚 Daily Snapshots ({loadSnapshots().length})</button>
+              <button onClick={exportData} className="btn btn-ghost" title="Machine-readable. Used by the app for import/export.">⬇ Export JSON</button>
+              <button onClick={exportExcel} className="btn btn-ghost" title="Multi-sheet workbook for humans. Cannot be re-imported.">⬇ Export Excel</button>
+              <button onClick={exportPDF} className="btn btn-ghost" title="Printable summary report for humans. Cannot be re-imported.">⬇ Export PDF</button>
+              <label className="btn btn-ghost cursor-pointer">
+                ⬆ Import JSON
+                <input type="file" accept=".json" className="hidden" onChange={(e) => e.target.files[0] && importData(e.target.files[0])} />
+              </label>
+              <button onClick={wipeAll} className="btn btn-danger">Erase All Data</button>
+            </div>
+            <label className="flex items-start gap-2 mt-4 cursor-pointer text-xs">
+              <input type="checkbox" checked={autoDownload} onChange={handleAutoDownloadToggle}
+                     style={{ width: 'auto', marginTop: 2 }} />
+              <span className="font-medium not-italic">Auto-download a JSON backup once per day</span>
+            </label>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Backups (Daily Snapshots) */}
+      <BackupsModal
+        open={showBackups}
+        onClose={() => setShowBackups(false)}
+        onView={(snap, date) => { setShowBackups(false); setViewingSnap({ snap, date }); }}
+        onRestore={restoreFromSnapshot}
+        toast={toast}
+      />
+
+      {/* Read-only snapshot viewer */}
+      {viewingSnap && (
+        <SnapshotViewer
+          snapshot={viewingSnap.snap}
+          snapshotDate={viewingSnap.date}
+          onClose={() => setViewingSnap(null)}
+        />
+      )}
+
+      <Toast msg={toastMsg} onDone={() => setToastMsg('')} />
+    </div>
+  );
+}
+
+try {
+  ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+} catch (err) {
+  document.getElementById('root').innerHTML =
+    '<div style="padding:32px;font-family:system-ui;color:#1b1c22;max-width:640px;margin:40px auto;background:#f5efe1;border:1px solid #c2b791;border-radius:4px"><h2 style="font-family:Fraunces,serif;margin:0 0 12px;color:#c8252c">App failed to load</h2><p>One of the script CDNs may be blocked. Try a different network or browser. Error: <code>' + (err && err.message ? err.message : err) + '</code></p></div>';
+  console.error('Bike Care ERP failed to mount:', err);
+}
+</script>
+</body>
+</html>
