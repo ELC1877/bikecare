@@ -498,7 +498,7 @@
 <!-- ── ROOT ──────────────────────────────────────────────────────────────── -->
 <div id="root">
   <div style="padding:48px 24px;font-family:'Inter Tight',system-ui,sans-serif;color:#64748b;text-align:center">
-    <div style="font-family:'Fraunces',serif;font-size:28px;color:#6366f1;font-style:italic;margin-bottom:8px">Bike Care <span style="font-size:14px;font-style:normal;letter-spacing:0.06em">V2.6</span></div>
+    <div style="font-family:'Fraunces',serif;font-size:28px;color:#6366f1;font-style:italic;margin-bottom:8px">Bike Care <span style="font-size:14px;font-style:normal;letter-spacing:0.06em">V2.7</span></div>
     <div style="font-size:13px;letter-spacing:0.14em;text-transform:uppercase">Loading the books…</div>
   </div>
 </div>
@@ -5448,7 +5448,7 @@ function App() {
       for (let i = 1; i <= pageCount; i++) {
         doc.setPage(i);
         doc.setFont('helvetica', 'italic'); doc.setFontSize(8); doc.setTextColor(120);
-        doc.text(`${state.meta.businessName} · Bike Care ERP V2.2 · page ${i} of ${pageCount}`, W / 2, doc.internal.pageSize.getHeight() - 18, { align: 'center' });
+        doc.text(`${state.meta.businessName} · Bike Care ERP V2.7 · page ${i} of ${pageCount}`, W / 2, doc.internal.pageSize.getHeight() - 18, { align: 'center' });
       }
 
       doc.save(`bikecare-erp-${todayISO()}.pdf`);
